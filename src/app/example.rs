@@ -1,8 +1,10 @@
+use super::ChapterAnchor;
+
 
 pub struct TemplateApp {
     // Example stuff:
     label: String,
-
+    anchor: ChapterAnchor,
     value: f32,
 }
 
@@ -12,6 +14,7 @@ impl Default for TemplateApp {
             // Example stuff:
             label: "Hello World!".to_owned(),
             value: 2.7,
+            anchor: ChapterAnchor::default()
         }
     }
 }
@@ -39,7 +42,7 @@ impl eframe::App for TemplateApp {
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
 
-        super::default_menu(ctx);
+        super::default_menu(ctx, &mut self.anchor);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's

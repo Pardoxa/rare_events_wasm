@@ -19,7 +19,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "eframe template",
         native_options,
-        Box::new(|cc| Box::new(rare_events_wasm::TemplateApp::new(cc))),
+        Box::new(|cc| Box::new(rare_events_wasm::app::landing_page::AppState::new(cc))),
     )
 }
 
@@ -35,7 +35,7 @@ fn main() {
             .start(
                 "the_canvas_id", // hardcode it
                 web_options,
-                Box::new(|cc| Box::new(rare_events_wasm::TemplateApp::new(cc))),
+                Box::new(|cc| Box::new(rare_events_wasm::app::landing_page::AppState::new(cc))),
             )
             .await
             .expect("failed to start eframe");
