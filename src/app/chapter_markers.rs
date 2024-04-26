@@ -3,10 +3,10 @@ use strum_macros::EnumIter;
 use strum_macros::EnumString;
 use std::marker;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum ChapterAnchor{
-    Chapter1(Chapter1Marks),
-    Chapter2(Chapter2Marks),
+    Chapter1(Chapter1),
+    Chapter2(Chapter2),
     Invalid
 }
 
@@ -24,14 +24,15 @@ impl ChapterAnchor{
 
 impl Default for ChapterAnchor{
     fn default() -> Self {
-        Self::Chapter1(Chapter1Marks::First)
+        Self::Chapter1(Chapter1::First)
     }
 }
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, EnumString)]
-pub enum Chapter1Marks{
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, EnumIter, EnumString)]
+pub enum Chapter1{
+    #[default]
     #[strum(ascii_case_insensitive)]
     First,
     #[strum(ascii_case_insensitive)]
@@ -39,8 +40,9 @@ pub enum Chapter1Marks{
 }
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, EnumString)]
-pub enum Chapter2Marks{
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, EnumIter, EnumString)]
+pub enum Chapter2{
+    #[default]
     #[strum(ascii_case_insensitive)]
     First
 }
@@ -56,18 +58,8 @@ impl<T> ChapterReading for T
 {
     fn get_string(&self) -> String{
         let name = std::any::type_name::<Self>();
-        let last = name.split("::").last().unwrap();
-        let digits = r"\d+";
-        let re = regex::Regex::new(digits).unwrap();
-        let number = re.find(last)
-            .map(|m| &last[m.start()..m.end()]);
-        match number{
-            Some(num) => {
-                let name = format!("{self:?}");
-                format!("chapter{num}-{}", name.to_ascii_lowercase())
-            },
-            None => "Invalid".to_owned()
-        }
+        let last = name.rsplit("::").next().unwrap();
+        format!("{last}-{self:?}")
     }
     fn read_str(s: &str) -> Option<Self>{
         Self::from_str(s).ok()
@@ -91,11 +83,11 @@ impl ChapterAnchor{
         };
         match chapter_str.to_ascii_lowercase().as_str(){
             "chapter1" | "chapter01" => {
-                Chapter1Marks::read_str(jump_str)
+                Chapter1::read_str(jump_str)
                     .map(ChapterAnchor::Chapter1)
             },
             "chapter2" | "chapter02" => {
-                Chapter2Marks::read_str(jump_str)
+                Chapter2::read_str(jump_str)
                     .map(ChapterAnchor::Chapter2)
             },
             _ => None

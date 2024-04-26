@@ -4,7 +4,7 @@ use strum::IntoEnumIterator;
 pub trait MenuAction{
     fn change_chapter_anchor(&self) -> ChapterAnchor
     {
-        ChapterAnchor::Chapter2(super::Chapter2Marks::First)
+        ChapterAnchor::Chapter2(super::Chapter2::First)
     }
 }
 
@@ -15,13 +15,13 @@ impl MenuAction for (){
     }
 }
 
-impl MenuAction for Chapter1Marks{
+impl MenuAction for Chapter1{
     fn change_chapter_anchor(&self) -> ChapterAnchor {
         ChapterAnchor::Chapter1(*self)
     }
 }
 
-impl MenuAction for Chapter2Marks{
+impl MenuAction for Chapter2{
     fn change_chapter_anchor(&self) -> ChapterAnchor {
         ChapterAnchor::Chapter2(*self)
     }
@@ -55,11 +55,11 @@ pub struct GlobalContextMenu{
 impl Default for GlobalContextMenu{
     fn default() -> Self {
         
-        let chapter1_list = Chapter1Marks::generate_menu_vec();
+        let chapter1_list = Chapter1::generate_menu_vec();
         let sub_ch1 = SubMenu{list: chapter1_list,
             sub_menu_name: "Chapter1".to_owned()
         };
-        let chapter2_list = Chapter2Marks::generate_menu_vec();
+        let chapter2_list = Chapter2::generate_menu_vec();
         let sub_ch2 = SubMenu{list: chapter2_list,
             sub_menu_name: "Chapter2".to_owned()
         };
