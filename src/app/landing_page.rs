@@ -1,4 +1,4 @@
-use super::ChapterAnchor;
+use super::{ChapterAnchor, GlobalContextMenu};
 
 #[derive(Default)]
 pub struct AppState {
@@ -40,6 +40,27 @@ impl eframe::App for AppState {
         self.text = format!("{:?}", self.anchor);
         
         super::default_menu(ctx, &mut self.anchor);
+
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            // The central panel the region left after adding TopPanel's and SidePanel's
+            ui.heading("Index");
+            let menu = GlobalContextMenu::default();
+            ui.separator();
+            menu.print_links(ui, &mut self.anchor);
+
+            ui.separator();
+
+            ui.hyperlink_to(
+                "Source code",
+                "https://github.com/Pardoxa/rare_events_wasm"
+            );
+
+            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                powered_by_egui_and_eframe(ui);
+                egui::warn_if_debug_build(ui);
+            });
+        });
         if old_anchor != self.anchor{
             #[cfg(target_arch = "wasm32")]
             if frame.is_web()
@@ -47,24 +68,6 @@ impl eframe::App for AppState {
                 ctx.open_url(egui::OpenUrl::same_tab(self.anchor.get_string()))
             }
         }
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("Landing Page");
-            ui.label(&self.text);
-
-            ui.separator();
-
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
-            ));
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
-            });
-        });
     }
 }
 

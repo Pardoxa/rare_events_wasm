@@ -1,4 +1,5 @@
 use super::chapter_markers::*;
+use egui::{Label, Sense};
 use strum::IntoEnumIterator;
 
 pub trait MenuAction{
@@ -49,7 +50,7 @@ impl<T> GenerateChapterList for T
 }
 
 pub struct GlobalContextMenu{
-    pub menu: Vec<MenuOrSubMenu>
+    pub menu: MenuOrSubMenu
 }
 
 impl Default for GlobalContextMenu{
@@ -71,7 +72,29 @@ impl Default for GlobalContextMenu{
                 MenuOrSubMenu::SubMenu(sub_ch2)
             ]
         };
-        Self { menu: vec![MenuOrSubMenu::SubMenu(global_sub)] }
+        Self { menu: MenuOrSubMenu::SubMenu(global_sub) }
+    }
+}
+
+impl GlobalContextMenu{
+    fn nested_menu(&self, ui: &mut egui::Ui, anchor: &mut ChapterAnchor)
+    {
+        self.menu.nested_menu(ui, anchor)
+        
+    }
+
+    pub fn print_links(&self, ui: &mut egui::Ui, anchor: &mut ChapterAnchor)
+    {
+        match &self.menu{
+            MenuOrSubMenu::SubMenu(sub) => {
+                for item in sub.list.iter(){
+                    item.nested_links(ui, anchor, 0)
+                }
+            },
+            MenuOrSubMenu::Menu(_) => {
+                self.print_links(ui, anchor)
+            }
+        }
     }
 }
 
@@ -113,16 +136,38 @@ impl MenuOrSubMenu{
             }
         }
     }
-}
 
-impl GlobalContextMenu{
-    fn nested_menu(&self, ui: &mut egui::Ui, anchor: &mut ChapterAnchor)
+    fn nested_links(&self, ui: &mut egui::Ui, anchor: &mut ChapterAnchor, tabs: u8)
     {
-        for entry in self.menu.iter(){
-            entry.nested_menu(ui, anchor)
+        match self{
+            MenuOrSubMenu::Menu(item) => {
+                let mut text = String::new();
+                for _ in 0..tabs{
+                    text.push('\t');
+                }
+                text.push_str(&item.name);
+                let label = Label::new(text).sense(Sense::click());
+                if ui.add(label).clicked(){
+                    *anchor = item.action.change_chapter_anchor();
+                }
+            },
+            MenuOrSubMenu::SubMenu(sub) => {
+                ui.label(&sub.sub_menu_name);
+                ui.vertical( 
+                    |ui|
+                    {
+                        for entry in sub.list.iter(){
+                            entry.nested_links(ui, anchor, tabs + 1)
+                        }
+                    }
+                );
+                
+            }
         }
     }
 }
+
+
 
 pub fn default_menu(ctx: &egui::Context, anchor: &mut ChapterAnchor)
 {
