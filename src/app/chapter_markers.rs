@@ -24,7 +24,7 @@ impl ChapterAnchor{
 
 impl Default for ChapterAnchor{
     fn default() -> Self {
-        Self::Chapter1(Chapter1::First)
+        Self::Invalid
     }
 }
 

@@ -47,33 +47,7 @@ impl eframe::App for AppState {
         
         super::default_menu(ctx, &mut self.anchor);
 
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("Index");
-            let menu = GlobalContextMenu::default();
-            ui.separator();
-            menu.print_links(ui, &mut self.anchor);
-
-            ui.separator();
-
-            ui.hyperlink_to(
-                "Source code",
-                "https://github.com/Pardoxa/rare_events_wasm"
-            );
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
-            });
-        });
-        if old_anchor != self.anchor{
-            #[cfg(target_arch = "wasm32")]
-            if frame.is_web()
-            {
-                ctx.open_url(egui::OpenUrl::same_tab(self.anchor.get_string()))
-            }
-        } else {
+        if old_anchor == self.anchor{
             // like this I can now get default values or the stored value, 
             // so I can use this to switch between them
             match &self.anchor{
@@ -87,14 +61,45 @@ impl eframe::App for AppState {
                     *some = 10;
                     
                 },
-                _ => {
-                    let some: &mut i8 = self.anything.to_something_or_default_mut();
-                    *some = -10;
-                    
+                ChapterAnchor::Invalid => {
+                    index_page(ctx, &mut self.anchor);
                 }
             }
+        } 
+
+        if old_anchor != self.anchor {
+            #[cfg(target_arch = "wasm32")]
+            if frame.is_web()
+            {
+                ctx.open_url(egui::OpenUrl::same_tab(self.anchor.get_string()))
+            }
         }
+        
+        
     }
+}
+
+fn index_page(ctx: &egui::Context, anchor: &mut ChapterAnchor)
+{
+    egui::CentralPanel::default().show(ctx, |ui| {
+        // The central panel the region left after adding TopPanel's and SidePanel's
+        ui.heading("Index");
+        let menu = GlobalContextMenu::default();
+        ui.separator();
+        menu.print_links(ui, anchor);
+
+        ui.separator();
+
+        ui.hyperlink_to(
+            "Source code",
+            "https://github.com/Pardoxa/rare_events_wasm"
+        );
+
+        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            powered_by_egui_and_eframe(ui);
+            egui::warn_if_debug_build(ui);
+        });
+    });
 }
 
 fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
