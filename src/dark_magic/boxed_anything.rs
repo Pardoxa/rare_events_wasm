@@ -20,8 +20,7 @@ impl BoxedAnything{
     pub fn to_something_or_default_mut<B>(&'_ mut self) -> &'_ mut B
     where B: Default + 'static
     {
-        if (*self.content).type_id() != TypeId::of::<B>(){
-            println!("IS UNEQUAL");
+        if !(*self.content).is::<B>(){
             self.content = Box::<B>::default();
         }
         self.content.downcast_mut().unwrap()
