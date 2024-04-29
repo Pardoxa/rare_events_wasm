@@ -146,8 +146,10 @@ impl MenuOrSubMenu{
                     text.push('\t');
                 }
                 text.push_str(&item.name);
-                let label = Label::new(text).sense(Sense::click());
-                if ui.add(label).clicked(){
+                let label = Label::new(text)
+                    .sense(Sense::click())
+                    .selectable(false);
+                if ui.add(label).on_hover_cursor(egui::CursorIcon::PointingHand).clicked(){
                     *anchor = item.action.change_chapter_anchor();
                 }
             },
