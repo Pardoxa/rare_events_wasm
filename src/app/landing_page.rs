@@ -1,9 +1,11 @@
+use crate::dark_magic::BoxedAnything;
+
 use super::{ChapterAnchor, GlobalContextMenu};
 
-#[derive(Default)]
 pub struct AppState {
     pub anchor: ChapterAnchor,
-    pub text: String
+    pub text: String,
+    pub anything: BoxedAnything
 }
 
 
@@ -15,7 +17,11 @@ impl AppState {
 
         // here I do NOT save the app state
 
-        Default::default()
+        AppState{
+            anchor: ChapterAnchor::default(),
+            text: String::new(),
+            anything: BoxedAnything::new(())
+        }
     }
 }
 
@@ -66,6 +72,26 @@ impl eframe::App for AppState {
             if frame.is_web()
             {
                 ctx.open_url(egui::OpenUrl::same_tab(self.anchor.get_string()))
+            }
+        } else {
+            // like this I can now get default values or the stored value, 
+            // so I can use this to switch between them
+            match &self.anchor{
+                ChapterAnchor::Chapter1(_) => {
+                    let some: &mut String = self.anything.to_something_or_default_mut();
+                    *some = "bla".to_owned();
+                    
+                },
+                ChapterAnchor::Chapter2(_) => {
+                    let some: &mut u32 = self.anything.to_something_or_default_mut();
+                    *some = 10;
+                    
+                },
+                _ => {
+                    let some: &mut i8 = self.anything.to_something_or_default_mut();
+                    *some = -10;
+                    
+                }
             }
         }
     }
