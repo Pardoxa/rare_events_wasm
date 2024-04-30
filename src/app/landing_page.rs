@@ -1,6 +1,6 @@
 use crate::dark_magic::BoxedAnything;
 
-use super::{ChapterAnchor, GlobalContextMenu};
+use super::{chapter1, ChapterAnchor, GlobalContextMenu};
 
 pub struct AppState {
     pub anchor: ChapterAnchor,
@@ -51,10 +51,8 @@ impl eframe::App for AppState {
             // like this I can now get default values or the stored value, 
             // so I can use this to switch between them
             match &self.anchor{
-                ChapterAnchor::Chapter1(_) => {
-                    let some: &mut String = self.anything.to_something_or_default_mut();
-                    *some = "bla".to_owned();
-                    
+                ChapterAnchor::Chapter1(which) => {
+                    chapter1::chapter_1_switch(which, &mut self.anything, ctx);
                 },
                 ChapterAnchor::Chapter2(_) => {
                     let some: &mut u32 = self.anything.to_something_or_default_mut();
