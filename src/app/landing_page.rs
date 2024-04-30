@@ -32,12 +32,12 @@ impl eframe::App for AppState {
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
         let old_anchor = self.anchor;
         #[cfg(target_arch = "wasm32")]
-        if let Some(anchor) = frame.info().web_info.location.hash.strip_prefix('#') {
+        if let Some(anchor) = _frame.info().web_info.location.hash.strip_prefix('#') {
             self.anchor = match ChapterAnchor::read_str(anchor){
                 Some(a) => a,
                 None => ChapterAnchor::Invalid
@@ -67,7 +67,7 @@ impl eframe::App for AppState {
 
         if old_anchor != self.anchor {
             #[cfg(target_arch = "wasm32")]
-            if frame.is_web()
+            if _frame.is_web()
             {
                 ctx.open_url(egui::OpenUrl::same_tab(self.anchor.get_string()))
             }
