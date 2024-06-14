@@ -1,6 +1,5 @@
 use super::ChapterAnchor;
 
-
 pub struct TemplateApp {
     // Example stuff:
     label: String,
