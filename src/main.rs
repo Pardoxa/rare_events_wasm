@@ -17,7 +17,7 @@ fn main() -> eframe::Result<()> {
     //        .expect("Failed to load icon"),
     //),
     eframe::run_native(
-        "eframe template",
+        "LargeDeviationBook",
         native_options,
         Box::new(|cc| Box::new(rare_events_wasm::app::landing_page::AppState::new(cc))),
     )
