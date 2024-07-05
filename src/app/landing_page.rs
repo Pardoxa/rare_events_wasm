@@ -82,6 +82,9 @@ fn index_page(ctx: &egui::Context, anchor: &mut ChapterAnchor)
     egui::CentralPanel::default().show(ctx, |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
         ui.heading("Index");
+        ui.label("Hier entsteht eine neue Website mithilfe von Rust und Webassembly. Die website ist bisher in der frühen Testphase. Kommen Sie am besten später wieder!");
+        ui.label("A new website is being created here with the help of Rust and Webassembly. The website is currently in the early test phase. It's best to come back later!");
+    
         let menu = GlobalContextMenu::default();
         ui.separator();
         menu.print_links(ui, anchor);
