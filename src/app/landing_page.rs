@@ -40,7 +40,7 @@ impl eframe::App for AppState {
         if let Some(anchor) = _frame.info().web_info.location.hash.strip_prefix('#') {
             self.anchor = match ChapterAnchor::read_str(anchor){
                 Some(a) => a,
-                None => ChapterAnchor::Invalid
+                None => ChapterAnchor::Index
             };
         }
         self.text = format!("{:?}", self.anchor);
@@ -59,7 +59,7 @@ impl eframe::App for AppState {
                     *some = 10;
                     
                 },
-                ChapterAnchor::Invalid => {
+                ChapterAnchor::Index => {
                     index_page(ctx, &mut self.anchor);
                 }
             }

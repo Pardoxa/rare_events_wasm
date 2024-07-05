@@ -12,7 +12,7 @@ pub trait MenuAction{
 impl MenuAction for (){
     fn change_chapter_anchor(&self) -> ChapterAnchor
     {
-        ChapterAnchor::Invalid
+        ChapterAnchor::Index
     }
 }
 
@@ -65,9 +65,15 @@ impl Default for GlobalContextMenu{
             sub_menu_name: "Chapter2".to_owned()
         };
 
+        let index = MenuItem{
+            name: "Index".to_owned(),
+            action: Box::new(())
+        };
+
         let global_sub = SubMenu{
             sub_menu_name: "☰".to_string(),
             list: vec![
+                MenuOrSubMenu::Menu(index),
                 MenuOrSubMenu::SubMenu(sub_ch1),
                 MenuOrSubMenu::SubMenu(sub_ch2)
             ]

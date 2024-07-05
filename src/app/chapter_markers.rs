@@ -7,14 +7,14 @@ use std::marker;
 pub enum ChapterAnchor{
     Chapter1(Chapter1),
     Chapter2(Chapter2),
-    Invalid
+    Index
 }
 
 impl ChapterAnchor{
     pub fn get_string(&self) -> String
     {
         let s = match self{
-            Self::Invalid => "Invalid".to_owned(),
+            Self::Index => "Index".to_owned(),
             Self::Chapter1(mark) => ChapterReading::get_string(mark),
             Self::Chapter2(mark) => ChapterReading::get_string(mark)
         };
@@ -24,7 +24,7 @@ impl ChapterAnchor{
 
 impl Default for ChapterAnchor{
     fn default() -> Self {
-        Self::Invalid
+        Self::Index
     }
 }
 
