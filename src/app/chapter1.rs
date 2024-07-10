@@ -3,6 +3,7 @@ use crate::dark_magic::BoxedAnything;
 use super::Chapter1;
 
 mod first;
+mod second;
 
 
 pub fn chapter_1_switch(which: &Chapter1, any: &mut BoxedAnything, ctx: &egui::Context)
@@ -12,7 +13,7 @@ pub fn chapter_1_switch(which: &Chapter1, any: &mut BoxedAnything, ctx: &egui::C
             first::chapter_1_switch(any, ctx)
         },
         Chapter1::Second => {
-            // todo
+            second::chapter_1_switch(any, ctx)
         }
     }
 }
