@@ -1,4 +1,6 @@
-use crate::dark_magic::BoxedAnything;
+use egui::FontDefinitions;
+
+use crate::{dark_magic::BoxedAnything, misc};
 
 use super::{chapter1, ChapterAnchor, GlobalContextMenu};
 
@@ -11,11 +13,15 @@ pub struct AppState {
 
 impl AppState {
     /// Called once before the first frame.
-    pub fn new(_eframe: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(eframe: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
         // here I do NOT save the app state
+
+        eframe.egui_ctx.set_fonts(
+            FontDefinitions::default()
+        );
         AppState{
             anchor: ChapterAnchor::default(),
             text: String::new(),
@@ -80,6 +86,7 @@ impl eframe::App for AppState {
 
 fn index_page(ctx: &egui::Context, anchor: &mut ChapterAnchor)
 {
+
     egui::CentralPanel::default().show(ctx, |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
         ui.heading("Index");
@@ -99,8 +106,19 @@ fn index_page(ctx: &egui::Context, anchor: &mut ChapterAnchor)
         );
 
         ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            ui.horizontal(
+                |ui| {
+                    let crate_version = format!("Website Version {}", misc::VERSION);
+                    let git_hash = format!("Git Hash: {}", misc::GIT_HASH);
+                    let compile_time = format!("Compile datetime: {}", misc::COMPILE_TIME);
+                    ui.label(crate_version);
+                    ui.label(git_hash);
+                    ui.label(compile_time);
+                }
+            );
             powered_by_egui_and_eframe(ui);
             egui::warn_if_debug_build(ui);
+            
         });
     });
 }
