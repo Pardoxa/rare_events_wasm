@@ -3,7 +3,6 @@ use derivative::Derivative;
 use crate::dark_magic::*;
 use egui_plot::{Plot, PlotPoint, PlotPoints, Points, Line};
 use web_time::Instant;
-use std::{ops::DerefMut, thread};
 
 
 
@@ -19,8 +18,7 @@ struct SecondData{
     start_time: Option<Instant>,
     x: f64,
     y: f64,
-    points: Vec<[f64; 2]>,
-    thread_helper: ThreadHelper<InternalData, Vec<[f64; 2]>>
+    points: Vec<[f64; 2]>
 }
 
 pub fn chapter_1_switch(any: &mut BoxedAnything, ctx: &egui::Context)
@@ -48,31 +46,18 @@ pub fn chapter_1_switch(any: &mut BoxedAnything, ctx: &egui::Context)
         }
     });
 
-
     egui::CentralPanel::default().show(ctx, |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
 
         let points = PlotPoints::Owned(data.data.clone());
         let points = Points::new(points).radius(4.0);
 
-        // NOTE: Spawning the thread etc is not really needed here, I just wanted to test 
-        // that functionality
+        data.points= (0..1000).map(|i| {
+            let x = i as f64 * 0.01 + seconds;
+            [x, x.sin()]
+        }).collect();
 
-        if let Some(clone) = data.thread_helper.get_clone(){
-            thread::spawn(move || {
-                let external: Vec<_> = (0..1000).map(|i| {
-                    let x = i as f64 * 0.01 + seconds;
-                    [x, x.sin()]
-                }).collect();
-                if let Some(mut lock) = clone.exposed_data_write_lock(){
-                    *(lock.deref_mut()) = ExposedData::Exists(external);
-                }
-            });
-        }
 
-        if let Some(new_points) = data.thread_helper.exposed_data_take(){
-            data.points = new_points;
-        }
         let point_plots: PlotPoints = data.points.iter()
             .copied()
             .collect();
@@ -90,6 +75,8 @@ pub fn chapter_1_switch(any: &mut BoxedAnything, ctx: &egui::Context)
                     plot_ui.line(line)
                 }
             );
+
+        
     });
 
     ctx.request_repaint();

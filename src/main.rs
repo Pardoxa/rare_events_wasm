@@ -26,14 +26,25 @@ fn main() -> eframe::Result<()> {
 // When compiling to web using trunk:
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    use eframe::{wasm_bindgen::JsCast, web_sys};
+
 
 
     let web_options = eframe::WebOptions::default();
 
+    let window = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+    let canvas = document
+        .get_element_by_id("the_canvas_id")
+        .unwrap();
+    let canvas = canvas
+        .dyn_into()
+        .unwrap();
+
     wasm_bindgen_futures::spawn_local(async {
         eframe::WebRunner::new()
             .start(
-                "the_canvas_id", // hardcode it
+                canvas, // hardcode it
                 web_options,
                 Box::new(|cc| Ok(Box::new(rare_events_wasm::app::landing_page::AppState::new(cc)))),
             )

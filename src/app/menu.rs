@@ -188,8 +188,7 @@ pub fn default_menu(ctx: &egui::Context, anchor: &mut ChapterAnchor)
             let default_menu = GlobalContextMenu::default();
             default_menu.nested_menu(ui, anchor);
             
-
-            egui::widgets::global_dark_light_mode_buttons(ui);
+            egui::global_theme_preference_buttons(ui);
         });
     });
 }
