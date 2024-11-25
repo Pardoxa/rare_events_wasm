@@ -36,7 +36,9 @@ pub enum Chapter1{
     #[strum(ascii_case_insensitive)]
     First,
     #[strum(ascii_case_insensitive)]
-    Second
+    Second,
+    #[strum(ascii_case_insensitive)]
+    Third
 }
 
 

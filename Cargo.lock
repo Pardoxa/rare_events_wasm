@@ -1093,8 +1093,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4567c8db10ae91089c99af84c68c38da3ec2f087c3f82960bcdbf3656b6f4d7"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1941,6 +1943,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_pcg"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59cad018caf63deb318e5a4586d99a24424a364f40f1e5778c29aca23f4fc73e"
+dependencies = [
+ "rand_core",
+]
+
+[[package]]
 name = "rare_events_wasm"
 version = "0.1.0"
 dependencies = [
@@ -1950,7 +1961,10 @@ dependencies = [
  "egui",
  "egui_code_editor",
  "egui_plot",
+ "getrandom",
  "lazy_static",
+ "rand",
+ "rand_pcg",
  "strum",
  "strum_macros",
  "wasm-bindgen-futures",
