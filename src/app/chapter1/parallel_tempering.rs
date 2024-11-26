@@ -1,6 +1,6 @@
 use derivative::Derivative;
 use egui::{Button, DragValue, Label};
-use rand::SeedableRng;
+use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
 
@@ -40,6 +40,14 @@ impl ParallelTemperingData{
 pub struct Temperature{
     temperature: f64,
     config: Vec<bool>
+}
+
+impl Temperature{
+    pub fn markov_step(&mut self, rng: &mut Pcg64)
+    {
+        let entry = self.config.choose_mut(rng).unwrap();
+        *entry = rng.gen_bool(0.5);
+    }
 }
 
 
@@ -131,10 +139,12 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
             }
         );
 
+
     egui::CentralPanel::default().show(ctx, |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
         for temp in data.temperatures.iter_mut()
         {
+            temp.markov_step(data.rng.as_mut().unwrap());
             let heads = temp.count_true();
             let label = format!("Temp: {} Heads: {}", temp.temperature, heads);
             ui.label(label);
