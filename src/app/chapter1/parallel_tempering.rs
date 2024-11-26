@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use derivative::Derivative;
 use egui::{Button, DragValue, Label};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
@@ -11,11 +13,14 @@ pub struct ParallelTemperingData
     #[derivative(Default(value="Vec::new()"))]
     temperatures: Vec<Temperature>,
     /// If user clicks on add temperature, this one is added
+    #[derivative(Default(value="-0.5"))]
     temperature_to_add: f64,
-    #[derivative(Default(value="100"))]
-    num_coins: u32,
+    #[derivative(Default(value="NonZeroU32::new(100).unwrap()"))]
+    num_coins: NonZeroU32,
     seed: u64,
-    rng: Option<Pcg64>
+    rng: Option<Pcg64>,
+    paused: bool,
+    step_once: bool
 }
 
 impl ParallelTemperingData{
@@ -45,24 +50,42 @@ pub struct Temperature{
 impl Temperature{
     pub fn markov_step(&mut self, rng: &mut Pcg64)
     {
+        let old_energy = self.count_true();
         let entry = self.config.choose_mut(rng).unwrap();
+        let old_val = *entry;
         *entry = rng.gen_bool(0.5);
+        let new_energy = if old_val == *entry{
+            old_energy
+        } else if old_val {
+            old_energy + 1
+        } else {
+            old_energy - 1
+        };
+
+        let acceptance_prob = ((old_energy - new_energy) as f64 / self.temperature).exp();
+        if rng.gen::<f64>() >= acceptance_prob {
+            // we reject
+            *entry = old_val;
+        }
     }
 }
 
 
 impl Temperature{
-    pub fn new(temp: f64, length: usize) -> Self
+    pub fn new(temp: f64, length: NonZeroU32, rng: &mut Pcg64) -> Self
     {
+        let config = (0..length.get())
+            .map(|_| rng.gen_bool(0.5))
+            .collect();
         Temperature{
             temperature: temp,
-            config: vec![false; length]
+            config
         }
     }
 
-    pub fn count_true(&self) -> usize
+    pub fn count_true(&self) -> isize
     {
-        self.config.iter().filter(|&s| *s).count()
+        self.config.iter().filter(|&s| *s).count() as isize
     }
 }
 
@@ -82,8 +105,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     {
                         ui.add(Label::new("Temperature"));
                         ui.add(egui::DragValue::new(&mut data.temperature_to_add)
-                            .speed(1)
-                            );
+                                .speed(0.01)
+                            ).on_hover_text("Click to type a number. Or drag the value for quick changes.");
                     }
                 );
 
@@ -111,8 +134,13 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     );
                 }
                 
-                
-                if ui.add(Button::new("add temperature"))
+                let add_btn = ui.add(Button::new("add temperature"));
+
+
+                if data.temperature_to_add == 0.0 {
+                    add_btn.show_tooltip_text("We divide by the temperature in the formula for the acceptance probability. Thus 0 is an invalid temperature.");
+                }
+                else if add_btn
                     .clicked()
                 {
                     let to_add = data.temperature_to_add;
@@ -120,7 +148,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         data.temperatures.push(
                             Temperature::new(
                                 data.temperature_to_add,
-                                data.num_coins as usize
+                                data.num_coins,
+                                data.rng.as_mut().unwrap()
                             )
                         );
                         data.sort_temps();
@@ -129,11 +158,28 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 }
 
         
-                if !data.temperatures.is_empty() && ui.add(
-                    Button::new("Remove all Temperatures")
-                ).clicked()
-                {
-                    data.temperatures.clear();
+                
+                if !data.temperatures.is_empty(){
+                    if ui.add(
+                        Button::new("Remove all Temperatures")
+                    ).clicked()
+                    {
+                        data.temperatures.clear();
+                    }
+                    let txt = if data.paused{
+                        "continue"
+                    } else {
+                        "pause"
+                    };
+                    if ui.add(
+                        Button::new(txt)
+                    ).clicked() {
+                        data.paused = !data.paused;
+                    }
+
+                    if data.paused && ui.add(Button::new("step once")).clicked(){
+                        data.step_once = true;
+                    }
                 }
                     
             }
@@ -144,12 +190,14 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
         // The central panel the region left after adding TopPanel's and SidePanel's
         for temp in data.temperatures.iter_mut()
         {
-            temp.markov_step(data.rng.as_mut().unwrap());
+            if !data.paused || data.step_once{
+                temp.markov_step(data.rng.as_mut().unwrap());
+            }
             let heads = temp.count_true();
             let label = format!("Temp: {} Heads: {}", temp.temperature, heads);
             ui.label(label);
         }
-        
+        data.step_once = false;
     });
-    
+    ctx.request_repaint();
 }
