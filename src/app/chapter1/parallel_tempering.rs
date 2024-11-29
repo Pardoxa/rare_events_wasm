@@ -1,5 +1,5 @@
 use std::num::NonZeroU32;
-
+use sampling::HistU32Fast;
 use derivative::Derivative;
 use egui::{Button, DragValue, Label};
 use egui_plot::{AxisHints, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
@@ -47,7 +47,8 @@ impl ParallelTemperingData{
 pub struct Temperature{
     temperature: f64,
     config: Vec<bool>,
-    marker: MarkerShape
+    marker: MarkerShape,
+    hist: HistU32Fast
 }
 
 impl Temperature{
@@ -57,7 +58,7 @@ impl Temperature{
         let entry = self.config.choose_mut(rng).unwrap();
         let old_val = *entry;
         *entry = rng.gen_bool(0.5);
-        let new_energy = if old_val == *entry{
+        let mut new_energy = if old_val == *entry{
             old_energy
         } else if old_val {
             old_energy + 1
@@ -69,12 +70,16 @@ impl Temperature{
         if rng.gen::<f64>() >= acceptance_prob {
             // we reject
             *entry = old_val;
+            new_energy = old_energy;
         }
+        self.increment_hist(new_energy as u32);
     }
-}
 
+    pub fn increment_hist(&mut self, val: u32)
+    {
+        self.hist.increment_quiet(val);
+    }
 
-impl Temperature{
     pub fn new(
         temp: f64, 
         length: NonZeroU32, 
@@ -88,7 +93,8 @@ impl Temperature{
         Temperature{
             temperature: temp,
             config,
-            marker
+            marker,
+            hist: HistU32Fast::new_inclusive(0, length.get()).unwrap()
         }
     }
 
@@ -238,18 +244,17 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 {
                     let plot_points = PlotPoints::new(vec![plot_data]);
                     Points::new(plot_points)
-                        .radius(4.0)
+                        .radius(10.0)
                         .shape(marker)
                 }
             );
 
         let plot_bounds = PlotBounds::from_min_max(
             [0.0, 0.0], 
-            [data.num_coins.get() as f64, data.temperatures.len() as f64]
+            [data.num_coins.get() as f64, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
         );
 
         let y_axis = AxisHints::new_y()
-            .label_spacing(1.0..=1.0)
             .label("Temperature")
             .formatter(
                 |mark, _|
@@ -284,6 +289,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     plot_ui.set_plot_bounds(plot_bounds);
                 }
             );
+        
         data.step_once = false;
     });
     ctx.request_repaint();
