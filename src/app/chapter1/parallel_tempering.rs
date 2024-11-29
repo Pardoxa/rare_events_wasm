@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use derivative::Derivative;
 use egui::{Button, DragValue, Label};
-use egui_plot::{Plot, PlotBounds, PlotPoints, Points};
+use egui_plot::{AxisHints, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
@@ -21,7 +21,8 @@ pub struct ParallelTemperingData
     seed: u64,
     rng: Option<Pcg64>,
     paused: bool,
-    step_once: bool
+    step_once: bool,
+    marker_cycle: Option<Box<dyn Iterator<Item=MarkerShape>>>
 }
 
 impl ParallelTemperingData{
@@ -45,7 +46,8 @@ impl ParallelTemperingData{
 
 pub struct Temperature{
     temperature: f64,
-    config: Vec<bool>
+    config: Vec<bool>,
+    marker: MarkerShape
 }
 
 impl Temperature{
@@ -73,14 +75,20 @@ impl Temperature{
 
 
 impl Temperature{
-    pub fn new(temp: f64, length: NonZeroU32, rng: &mut Pcg64) -> Self
+    pub fn new(
+        temp: f64, 
+        length: NonZeroU32, 
+        rng: &mut Pcg64,
+        marker: MarkerShape
+    ) -> Self
     {
         let config = (0..length.get())
             .map(|_| rng.gen_bool(0.5))
             .collect();
         Temperature{
             temperature: temp,
-            config
+            config,
+            marker
         }
     }
 
@@ -94,6 +102,16 @@ impl Temperature{
 pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 {
     let data: &mut ParallelTemperingData = any.to_something_or_default_mut();
+    if data.marker_cycle.is_none(){
+        let markers: Vec<_> = MarkerShape::all().collect();
+        let iter = markers
+            .into_iter()
+            .cycle();
+        data.marker_cycle = Some(
+            Box::new(iter)
+        );
+    }
+    
     let is_dark_mode = ctx.style().visuals.dark_mode;
 
     egui::SidePanel::left("ParallelLeft")
@@ -150,7 +168,11 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             Temperature::new(
                                 data.temperature_to_add,
                                 data.num_coins,
-                                data.rng.as_mut().unwrap()
+                                data.rng.as_mut().unwrap(),
+                                data.marker_cycle.as_mut()
+                                    .unwrap()
+                                    .next()
+                                    .unwrap()
                             )
                         );
                         data.sort_temps();
@@ -206,27 +228,62 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     
                 }
             );
-            plot_points.push([heads as f64, id as f64]);
+            plot_points.push(([heads as f64, id as f64], temp.marker));
         }
-        let plot_points = PlotPoints::new(plot_points);
-        let points = Points::new(plot_points).radius(4.0);
+
+        let all_points = plot_points
+            .into_iter()
+            .map(
+                |(plot_data, marker)|
+                {
+                    let plot_points = PlotPoints::new(vec![plot_data]);
+                    Points::new(plot_points)
+                        .radius(4.0)
+                        .shape(marker)
+                }
+            );
 
         let plot_bounds = PlotBounds::from_min_max(
             [0.0, 0.0], 
             [data.num_coins.get() as f64, data.temperatures.len() as f64]
         );
 
+        let y_axis = AxisHints::new_y()
+            .label_spacing(1.0..=1.0)
+            .label("Temperature")
+            .formatter(
+                |mark, _|
+                {
+                    if mark.value.fract() < 0.01{
+                        let val = mark.value.round() as isize;
+                        if val >= 0 {
+                            match data.temperatures.get(val as usize){
+                                Some(tmp)  => tmp.temperature.to_string(),
+                                None => "".to_owned()
+                            }
+                        } else {
+                            "".to_string()
+                        }
+                    } else {
+                        "".to_owned()
+                    }
+                }
+            );
+
         Plot::new("my_plot")
-        .x_axis_label("time")
-        .y_axis_label("Arbitrary stuff")
-        .show(
-            ui, 
-            |plot_ui|
-            {
-                plot_ui.points(points);
-                plot_ui.set_plot_bounds(plot_bounds);
-            }
-        );
+            .x_axis_label("Number of Heads")
+            .show_y(false)
+            .custom_y_axes(vec![y_axis])
+            .show(
+                ui, 
+                |plot_ui|
+                {
+                    for points in all_points{
+                        plot_ui.points(points);
+                    }
+                    plot_ui.set_plot_bounds(plot_bounds);
+                }
+            );
         data.step_once = false;
     });
     ctx.request_repaint();
