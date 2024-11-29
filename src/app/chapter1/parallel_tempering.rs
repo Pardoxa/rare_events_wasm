@@ -2,6 +2,7 @@ use std::num::NonZeroU32;
 
 use derivative::Derivative;
 use egui::{Button, DragValue, Label};
+use egui_plot::{Plot, PlotBounds, PlotPoints, Points};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
@@ -188,15 +189,44 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
     egui::CentralPanel::default().show(ctx, |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
-        for temp in data.temperatures.iter_mut()
+
+        let mut plot_points = Vec::new();
+
+        for (id, temp) in data.temperatures.iter_mut().enumerate()
         {
             if !data.paused || data.step_once{
                 temp.markov_step(data.rng.as_mut().unwrap());
             }
             let heads = temp.count_true();
             let label = format!("Temp: {} Heads: {}", temp.temperature, heads);
-            ui.label(label);
+            ui.horizontal(
+                |ui|
+                {
+                    ui.label(label);
+                    
+                }
+            );
+            plot_points.push([heads as f64, id as f64]);
         }
+        let plot_points = PlotPoints::new(plot_points);
+        let points = Points::new(plot_points).radius(4.0);
+
+        let plot_bounds = PlotBounds::from_min_max(
+            [0.0, 0.0], 
+            [data.num_coins.get() as f64, data.temperatures.len() as f64]
+        );
+
+        Plot::new("my_plot")
+        .x_axis_label("time")
+        .y_axis_label("Arbitrary stuff")
+        .show(
+            ui, 
+            |plot_ui|
+            {
+                plot_ui.points(points);
+                plot_ui.set_plot_bounds(plot_bounds);
+            }
+        );
         data.step_once = false;
     });
     ctx.request_repaint();
