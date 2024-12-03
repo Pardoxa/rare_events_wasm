@@ -1,5 +1,6 @@
 use core::f64;
 use std::{num::NonZeroU32, mem::swap};
+use num_traits::Signed;
 use sampling::HistU32Fast;
 use derivative::Derivative;
 use egui::{Button, Color32, DragValue, Label, Slider};
@@ -325,7 +326,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         //if first_tmp.temperature > max {
                         //    first_tmp.temperature = max;
                         //}
-                    }
+                    }*/
 
                     // Adjusting Clamped temperatures
                     let current_temperatures: Vec<_> = data.temperatures
@@ -340,32 +341,34 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
                     for (window, temperature) in windows.zip(temperature_iter)
                     {
-                        let mut min = window[0].min(window[2]);
-                        let mut max = window[2].max(window[0]);
-                        let special_case = max.signum() != min.signum();
-                        let old_val = temperature.temperature;
-                        //if max.signum() != min.signum() {
-                        //    if window[1] < 0.0 {
-                        //        max = -f64::EPSILON * 100.0;
-                        //    } else {
-                        //        min = f64::EPSILON * 100.0;
-                        //    }
-                        //}
-                        ui.horizontal(
-                            |ui|
-                            {
-                                ui.add(
-                                    Slider::new(&mut temperature.temperature, min..=max)
-                                );
-                            }
-                        );
-                        if special_case{
-                            println!("MIN {min} MAX {max} SELF: {}", temperature.temperature);
+                        let min = window[0].min(window[2]);
+                        let max = window[2].max(window[0]);
+                        if max.signum() == min.signum() {
+                            ui.horizontal(
+                                |ui|
+                                {
+                                    ui.add(
+                                        Slider::new(&mut temperature.temperature, min..=max)
+                                    );
+                                }
+                            );
+                        } else{
+                            let range = if window[1].is_sign_negative(){
+                                f64::NEG_INFINITY..=min
+                            } else {
+                                max..=f64::INFINITY
+                            };
+                            // No slider possible because one of the borders is infinite
+                            ui.add(
+                                DragValue::new(&mut temperature.temperature)
+                                    .range(range)
+                            );
                         }
+                        
                     }
 
                     // Adjust highest temperature
-                    let mut iter = data.temperatures
+                    /*let mut iter = data.temperatures
                         .iter_mut()
                         .rev();
                     let tmp = iter.next().unwrap();
