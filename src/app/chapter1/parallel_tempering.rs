@@ -214,6 +214,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         data.step_once = true;
                     }
 
+                    ui.label("Adjust temperatures:");
+
                     // Adjusting lowest temperature
                     let mut iter = data.temperatures.iter_mut();
                     let tmp = iter.next().unwrap();
@@ -222,7 +224,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     ui.horizontal(
                         |ui|
                         {
-                            ui.label("Adjust Lowest Temperature");
+                            ui.label("Lowest:");
                             ui.add(widget);
                         }
                     );
@@ -253,7 +255,6 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         ui.horizontal(
                             |ui|
                             {
-                                ui.label(format!("Adjust {min:e} {max:e}"));
                                 ui.add(
                                     Slider::new(&mut temperature.temperature, min..=max)
                                 );
@@ -275,7 +276,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         ui.horizontal(
                             |ui|
                             {
-                                ui.label("Adjust Highest Temperature");
+                                ui.label("Highest:");
                                 ui.add(widget);
                             }
                         );
