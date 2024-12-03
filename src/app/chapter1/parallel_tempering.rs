@@ -7,6 +7,7 @@ use egui_plot::{AxisHints, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
+use ordered_float::NotNan;
 
 #[derive(Debug, Clone, Copy)]
 pub struct DarkLightColor
@@ -56,11 +57,12 @@ pub struct ParallelTemperingData
     color_cycle: Option<Box<dyn Iterator<Item=DarkLightColor>>>
 }
 
+
 impl ParallelTemperingData{
     pub fn sort_temps(&mut self)
     {
-        self.temperatures.sort_by(
-            |a, b| a.temperature.total_cmp(&b.temperature)
+        self.temperatures.sort_by_cached_key(
+            |a| SortHelper{temp: NotNan::new(a.temperature).unwrap()}
         );
     }
 
@@ -75,6 +77,38 @@ impl ParallelTemperingData{
     }
 }
 
+
+#[derive(PartialEq, Eq)]
+pub struct SortHelper{
+    temp: NotNan<f64>
+}
+
+impl PartialOrd for SortHelper{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let o_positive = other.temp.signum() == 1.0;
+        let s_positive = self.temp.signum() == 1.0;
+
+        match (s_positive, o_positive) {
+            (false, false) => {
+                other.temp.partial_cmp(&self.temp)
+            },
+            (true, true) => {
+                other.temp.partial_cmp(&self.temp)
+            },
+            _ => {
+                self.temp.partial_cmp(&other.temp)
+            }
+        }
+    }
+}
+
+impl Ord for SortHelper{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+#[derive(Debug)]
 pub struct Temperature{
     temperature: f64,
     config: Vec<bool>,
@@ -86,25 +120,26 @@ pub struct Temperature{
 impl Temperature{
     pub fn markov_step(&mut self, rng: &mut Pcg64)
     {
-        let old_energy = self.count_true();
+        let len = self.config.len();
+        let old_heads = self.number_of_heads();
         let entry = self.config.choose_mut(rng).unwrap();
         let old_val = *entry;
         *entry = rng.gen_bool(0.5);
-        let mut new_energy = if old_val == *entry{
-            old_energy
+        let mut new_heads = if old_val == *entry{
+            old_heads
         } else if old_val {
-            old_energy + 1
+            old_heads + 1
         } else {
-            old_energy - 1
+            old_heads - 1
         };
 
-        let acceptance_prob = ((old_energy - new_energy) as f64 / self.temperature).exp();
+        let acceptance_prob = ((old_heads - new_heads) as f64 / (self.temperature * len as f64)).exp();
         if rng.gen::<f64>() >= acceptance_prob {
             // we reject
             *entry = old_val;
-            new_energy = old_energy;
+            new_heads = old_heads;
         }
-        self.increment_hist(new_energy as u32);
+        self.increment_hist(new_heads as u32);
     }
 
     pub fn increment_hist(&mut self, val: u32)
@@ -132,9 +167,14 @@ impl Temperature{
         }
     }
 
-    pub fn count_true(&self) -> isize
+    pub fn number_of_heads(&self) -> isize
     {
         self.config.iter().filter(|&s| *s).count() as isize
+    }
+
+    pub fn heads_rate(&self) -> f64
+    {
+        self.number_of_heads() as f64 / self.config.len() as f64
     }
 }
 
@@ -264,8 +304,10 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
                     ui.label("Adjust temperatures:");
 
+                    // THE FOLLOWING CONTAINS BUGS AND IS COMMENTED OUT BECAUSE OF THIS
+                    
                     // Adjusting lowest temperature
-                    let mut iter = data.temperatures.iter_mut();
+                    /*let mut iter = data.temperatures.iter_mut();
                     let tmp = iter.next().unwrap();
                     let widget = DragValue::new(&mut tmp.temperature)
                         .speed(0.1);
@@ -280,9 +322,9 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     if let Some(next_tmp) = iter.next(){
                         let max = next_tmp.temperature;
                         let first_tmp = data.temperatures.first_mut().unwrap();
-                        if first_tmp.temperature > max {
-                            first_tmp.temperature = max;
-                        }
+                        //if first_tmp.temperature > max {
+                        //    first_tmp.temperature = max;
+                        //}
                     }
 
                     // Adjusting Clamped temperatures
@@ -298,8 +340,17 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
                     for (window, temperature) in windows.zip(temperature_iter)
                     {
-                        let min = window[0];
-                        let max = window[2];
+                        let mut min = window[0].min(window[2]);
+                        let mut max = window[2].max(window[0]);
+                        let special_case = max.signum() != min.signum();
+                        let old_val = temperature.temperature;
+                        //if max.signum() != min.signum() {
+                        //    if window[1] < 0.0 {
+                        //        max = -f64::EPSILON * 100.0;
+                        //    } else {
+                        //        min = f64::EPSILON * 100.0;
+                        //    }
+                        //}
                         ui.horizontal(
                             |ui|
                             {
@@ -308,7 +359,9 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 );
                             }
                         );
-                        
+                        if special_case{
+                            println!("MIN {min} MAX {max} SELF: {}", temperature.temperature);
+                        }
                     }
 
                     // Adjust highest temperature
@@ -330,10 +383,10 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         );
                         let min = next_tmp.temperature;
                         let first_tmp = data.temperatures.last_mut().unwrap();
-                        if first_tmp.temperature < min {
-                            first_tmp.temperature = min;
-                        }
-                    }
+                        //if first_tmp.temperature < min {
+                        //    first_tmp.temperature = min;
+                        //}
+                    }*/
                 }
                     
             }
@@ -351,8 +404,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 temp.markov_step(data.rng.as_mut().unwrap());
                 step_performed = true;
             }
-            let heads = temp.count_true();
-            plot_points.push(([heads as f64, id as f64], (temp.marker, temp.color)));
+            let heads_rate = temp.heads_rate();
+            plot_points.push(([heads_rate, id as f64], (temp.marker, temp.color)));
         }
 
         let all_points = plot_points
@@ -370,7 +423,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
         let plot_bounds = PlotBounds::from_min_max(
             [0.0, 0.0], 
-            [data.num_coins.get() as f64, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
+            [1.0, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
         );
 
         let y_axis = AxisHints::new_y()
@@ -434,7 +487,7 @@ fn temp_exchanges(rng: &mut Pcg64, temperatures: &mut [Temperature])
     }
     let num_pairs = temperatures.len() - 1;
 
-    for _ in 0..num_pairs
+    for _ in 0..1
     {
         let lower = rng.gen_range(0..num_pairs);
         let mut iter = temperatures
@@ -443,6 +496,9 @@ fn temp_exchanges(rng: &mut Pcg64, temperatures: &mut [Temperature])
         let a = iter.next().unwrap();
         let b = iter.next().unwrap();
         let exchange_prob = exchange_acceptance_probability(a, b);
+        println!(
+            "{lower} {exchange_prob}"
+        );
         if exchange_prob >= rng.gen()
         {
             exchange_temperatures(a, b);
@@ -467,8 +523,8 @@ fn exchange_temperatures(
         &mut b.color
     );
 
-    let ea = a.count_true();
-    let eb = b.count_true();
+    let ea = a.number_of_heads();
+    let eb = b.number_of_heads();
 
     a.hist.increment_quiet(ea as u32);
     b.hist.increment_quiet(eb as u32);
@@ -480,12 +536,18 @@ fn exchange_acceptance_probability(
 ) -> f64
 {
     assert!(
-        a.temperature <= b.temperature
+        SortHelper{temp: NotNan::new(a.temperature).unwrap()} 
+        <=
+        SortHelper{temp: NotNan::new(b.temperature).unwrap()},
+        "{a:?} {b:?}"
     );
-    let ea = a.count_true();
-    let eb = b.count_true();
+    //assert!(
+    //    a.temperature <= b.temperature
+    //);
+    let ea = a.heads_rate();
+    let eb = b.heads_rate();
     1.0_f64.min(
-        ((1.0/a.temperature - 1.0/b.temperature) * (ea - eb) as f64)
+        (-(1.0/a.temperature - 1.0/b.temperature) * (ea - eb))
             .exp()
     )
 }
