@@ -26,7 +26,7 @@ sampling = { git = "https://github.com/Pardoxa/sampling.git", rev = "35af57324c6
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen-futures = "0.4.45"
+wasm-bindgen-futures = "0.4.47"
 getrandom = { version = "0.2.15", features = ["js"] }
 
 [build-dependencies]

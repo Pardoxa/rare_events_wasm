@@ -1,7 +1,8 @@
+use core::f64;
 use std::num::NonZeroU32;
 use sampling::HistU32Fast;
 use derivative::Derivative;
-use egui::{Button, DragValue, Label};
+use egui::{Button, DragValue, Label, Slider};
 use egui_plot::{AxisHints, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
@@ -28,7 +29,7 @@ pub struct ParallelTemperingData
 impl ParallelTemperingData{
     pub fn sort_temps(&mut self)
     {
-        self.temperatures.sort_unstable_by(
+        self.temperatures.sort_by(
             |a, b| a.temperature.total_cmp(&b.temperature)
         );
     }
@@ -118,7 +119,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
         );
     }
     
-    let is_dark_mode = ctx.style().visuals.dark_mode;
+    // let is_dark_mode = ctx.style().visuals.dark_mode;
 
     egui::SidePanel::left("ParallelLeft")
         .show(
@@ -188,13 +189,16 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
         
                 
-                if !data.temperatures.is_empty(){
-                    if ui.add(
+                if !data.temperatures.is_empty() && ui.add(
                         Button::new("Remove all Temperatures")
                     ).clicked()
-                    {
-                        data.temperatures.clear();
-                    }
+                {
+                    // cannot be part of he next if statement,
+                    // that would result in a bug
+                    data.temperatures.clear();
+                }
+                
+                if !data.temperatures.is_empty(){
                     let txt = if data.paused{
                         "continue"
                     } else {
@@ -208,6 +212,78 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
                     if data.paused && ui.add(Button::new("step once")).clicked(){
                         data.step_once = true;
+                    }
+
+                    // Adjusting lowest temperature
+                    let mut iter = data.temperatures.iter_mut();
+                    let tmp = iter.next().unwrap();
+                    let widget = DragValue::new(&mut tmp.temperature)
+                        .speed(0.1);
+                    ui.horizontal(
+                        |ui|
+                        {
+                            ui.label("Adjust Lowest Temperature");
+                            ui.add(widget);
+                        }
+                    );
+                    
+                    if let Some(next_tmp) = iter.next(){
+                        let max = next_tmp.temperature;
+                        let first_tmp = data.temperatures.first_mut().unwrap();
+                        if first_tmp.temperature > max {
+                            first_tmp.temperature = max;
+                        }
+                    }
+
+                    // Adjusting Clamped temperatures
+                    let current_temperatures: Vec<_> = data.temperatures
+                        .iter()
+                        .map(|t| t.temperature)
+                        .collect();
+
+                    let windows = current_temperatures.windows(3);
+                    let temperature_iter = data.temperatures
+                        .iter_mut()
+                        .skip(1);
+
+                    for (window, temperature) in windows.zip(temperature_iter)
+                    {
+                        let min = window[0];
+                        let max = window[2];
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.label(format!("Adjust {min:e} {max:e}"));
+                                ui.add(
+                                    Slider::new(&mut temperature.temperature, min..=max)
+                                );
+                            }
+                        );
+                        
+                    }
+
+                    // Adjust highest temperature
+                    let mut iter = data.temperatures
+                        .iter_mut()
+                        .rev();
+                    let tmp = iter.next().unwrap();
+
+                    
+                    if let Some(next_tmp) = iter.next(){
+                        let widget = DragValue::new(&mut tmp.temperature)
+                            .speed(0.1);
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.label("Adjust Highest Temperature");
+                                ui.add(widget);
+                            }
+                        );
+                        let min = next_tmp.temperature;
+                        let first_tmp = data.temperatures.last_mut().unwrap();
+                        if first_tmp.temperature < min {
+                            first_tmp.temperature = min;
+                        }
                     }
                 }
                     
@@ -226,14 +302,6 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 temp.markov_step(data.rng.as_mut().unwrap());
             }
             let heads = temp.count_true();
-            let label = format!("Temp: {} Heads: {}", temp.temperature, heads);
-            ui.horizontal(
-                |ui|
-                {
-                    ui.label(label);
-                    
-                }
-            );
             plot_points.push(([heads as f64, id as f64], temp.marker));
         }
 
