@@ -305,30 +305,45 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
                     ui.label("Adjust temperatures:");
 
-                    // THE FOLLOWING CONTAINS BUGS AND IS COMMENTED OUT BECAUSE OF THIS
                     
-                    // Adjusting lowest temperature
-                    /*let mut iter = data.temperatures.iter_mut();
+                    // Adjusting lowest temperature TO DEBUG!!!
+                    let mut iter = data.temperatures.iter_mut();
                     let tmp = iter.next().unwrap();
-                    let widget = DragValue::new(&mut tmp.temperature)
-                        .speed(0.1);
-                    ui.horizontal(
-                        |ui|
-                        {
-                            ui.label("Lowest:");
-                            ui.add(widget);
-                        }
-                    );
+  
                     
                     if let Some(next_tmp) = iter.next(){
-                        let max = next_tmp.temperature;
-                        let first_tmp = data.temperatures.first_mut().unwrap();
-                        //if first_tmp.temperature > max {
-                        //    first_tmp.temperature = max;
-                        //}
-                    }*/
+                        let other = next_tmp.temperature;
+                        if other.signum() == tmp.temperature.signum(){
+                            let range = if other.is_sign_negative(){
+                                other..=(-f64::EPSILON)
+                            } else {
+                                other..=f64::INFINITY
+                            };
+                            let widget = DragValue::new(&mut tmp.temperature)
+                                .speed(0.1)
+                                .range(range);
+                            ui.horizontal(
+                            |ui|
+                            {
+                                ui.label("Inhibited:");
+                                ui.add(widget);
+                            }
+                        );
+                        }
+                    } else {
+                        let widget = DragValue::new(&mut tmp.temperature)
+                            .speed(0.1);
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.label("Uninhibited:");
+                                ui.add(widget);
+                            }
+                        );
+                    }
 
-                    // Adjusting Clamped temperatures
+
+                    // Adjusting Clamped temperatures. Has been debugged already
                     let current_temperatures: Vec<_> = data.temperatures
                         .iter()
                         .map(|t| t.temperature)
@@ -367,8 +382,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         
                     }
 
-                    // Adjust highest temperature
-                    /*let mut iter = data.temperatures
+                    // Adjust highest temperature TO DEBUG!!!
+                    let mut iter = data.temperatures
                         .iter_mut()
                         .rev();
                     let tmp = iter.next().unwrap();
@@ -389,7 +404,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         //if first_tmp.temperature < min {
                         //    first_tmp.temperature = min;
                         //}
-                    }*/
+                    }
                 }
                     
             }
