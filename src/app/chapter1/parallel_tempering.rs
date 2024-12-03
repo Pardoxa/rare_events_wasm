@@ -1,12 +1,40 @@
 use core::f64;
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, mem::swap};
 use sampling::HistU32Fast;
 use derivative::Derivative;
-use egui::{Button, DragValue, Label, Slider};
+use egui::{Button, Color32, DragValue, Label, Slider};
 use egui_plot::{AxisHints, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
+
+#[derive(Debug, Clone, Copy)]
+pub struct DarkLightColor
+{
+    dark: Color32,
+    light: Color32
+}
+
+impl DarkLightColor {
+    pub const fn get_color(&self, is_dark_mode: bool) -> Color32
+    {
+        if is_dark_mode{
+            self.dark
+        } else {
+            self.light
+        }
+    }
+}
+
+const COLORS: [DarkLightColor; 7] = [
+    DarkLightColor{dark: Color32::LIGHT_RED, light: Color32::RED},
+    DarkLightColor{dark: Color32::LIGHT_BLUE, light: Color32::BLUE},
+    DarkLightColor{dark: Color32::ORANGE, light: Color32::ORANGE},
+    DarkLightColor{dark: Color32::WHITE, light: Color32::BLACK},
+    DarkLightColor{dark: Color32::YELLOW, light: Color32::GOLD},
+    DarkLightColor{dark: Color32::LIGHT_GREEN, light: Color32::GREEN},
+    DarkLightColor{dark: Color32::LIGHT_YELLOW, light: Color32::KHAKI},
+];
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -23,7 +51,9 @@ pub struct ParallelTemperingData
     rng: Option<Pcg64>,
     paused: bool,
     step_once: bool,
-    marker_cycle: Option<Box<dyn Iterator<Item=MarkerShape>>>
+    marker_cycle: Option<Box<dyn Iterator<Item=MarkerShape>>>,
+    step_counter: u32,
+    color_cycle: Option<Box<dyn Iterator<Item=DarkLightColor>>>
 }
 
 impl ParallelTemperingData{
@@ -49,6 +79,7 @@ pub struct Temperature{
     temperature: f64,
     config: Vec<bool>,
     marker: MarkerShape,
+    color: DarkLightColor,
     hist: HistU32Fast
 }
 
@@ -85,7 +116,8 @@ impl Temperature{
         temp: f64, 
         length: NonZeroU32, 
         rng: &mut Pcg64,
-        marker: MarkerShape
+        marker: MarkerShape,
+        color: DarkLightColor
     ) -> Self
     {
         let config = (0..length.get())
@@ -95,7 +127,8 @@ impl Temperature{
             temperature: temp,
             config,
             marker,
-            hist: HistU32Fast::new_inclusive(0, length.get()).unwrap()
+            hist: HistU32Fast::new_inclusive(0, length.get()).unwrap(),
+            color
         }
     }
 
@@ -118,8 +151,17 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
             Box::new(iter)
         );
     }
+
+    if data.color_cycle.is_none(){
+        let iter = COLORS.iter()
+            .cycle()
+            .copied();
+        data.color_cycle = Some(
+            Box::new(iter)
+        );
+    }
     
-    // let is_dark_mode = ctx.style().visuals.dark_mode;
+    let is_dark_mode = ctx.style().visuals.dark_mode;
 
     egui::SidePanel::left("ParallelLeft")
         .show(
@@ -179,6 +221,11 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 data.marker_cycle.as_mut()
                                     .unwrap()
                                     .next()
+                                    .unwrap(),
+                                data.color_cycle
+                                    .as_mut()
+                                    .unwrap()
+                                    .next()
                                     .unwrap()
                             )
                         );
@@ -196,6 +243,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     // cannot be part of he next if statement,
                     // that would result in a bug
                     data.temperatures.clear();
+                    data.step_counter = 0;
                 }
                 
                 if !data.temperatures.is_empty(){
@@ -296,25 +344,27 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
         // The central panel the region left after adding TopPanel's and SidePanel's
 
         let mut plot_points = Vec::new();
-
+        let mut step_performed = false;
         for (id, temp) in data.temperatures.iter_mut().enumerate()
         {
             if !data.paused || data.step_once{
                 temp.markov_step(data.rng.as_mut().unwrap());
+                step_performed = true;
             }
             let heads = temp.count_true();
-            plot_points.push(([heads as f64, id as f64], temp.marker));
+            plot_points.push(([heads as f64, id as f64], (temp.marker, temp.color)));
         }
 
         let all_points = plot_points
             .into_iter()
             .map(
-                |(plot_data, marker)|
+                |(plot_data, plot_config)|
                 {
                     let plot_points = PlotPoints::new(vec![plot_data]);
                     Points::new(plot_points)
                         .radius(10.0)
-                        .shape(marker)
+                        .shape(plot_config.0)
+                        .color(plot_config.1.get_color(is_dark_mode))
                 }
             );
 
@@ -360,6 +410,82 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
             );
         
         data.step_once = false;
+
+        if step_performed{
+            data.step_counter += 1;
+            if data.step_counter == data.num_coins.get(){
+                // try exchanges
+                data.step_counter = 0;
+                temp_exchanges(
+                    data.rng.as_mut().unwrap(), 
+                    &mut data.temperatures
+                );
+            }
+        }
     });
     ctx.request_repaint();
+}
+
+
+fn temp_exchanges(rng: &mut Pcg64, temperatures: &mut [Temperature])
+{
+    if temperatures.len() < 2{
+        return;
+    }
+    let num_pairs = temperatures.len() - 1;
+
+    for _ in 0..num_pairs
+    {
+        let lower = rng.gen_range(0..num_pairs);
+        let mut iter = temperatures
+            .iter_mut()
+            .skip(lower);
+        let a = iter.next().unwrap();
+        let b = iter.next().unwrap();
+        let exchange_prob = exchange_acceptance_probability(a, b);
+        if exchange_prob >= rng.gen()
+        {
+            exchange_temperatures(a, b);
+        }
+    }
+}
+
+fn exchange_temperatures(
+    a: &mut Temperature,
+    b: &mut Temperature
+){
+    swap(
+        &mut a.marker, 
+        &mut b.marker
+    );
+    swap(
+        &mut a.config,
+        &mut b.config 
+    );
+    swap(
+        &mut a.color, 
+        &mut b.color
+    );
+
+    let ea = a.count_true();
+    let eb = b.count_true();
+
+    a.hist.increment_quiet(ea as u32);
+    b.hist.increment_quiet(eb as u32);
+}
+
+fn exchange_acceptance_probability(
+    a: &Temperature, 
+    b: &Temperature
+) -> f64
+{
+    assert!(
+        a.temperature <= b.temperature
+    );
+    let ea = a.count_true();
+    let eb = b.count_true();
+    1.0_f64.min(
+        ((1.0/a.temperature - 1.0/b.temperature) * (ea - eb) as f64)
+            .exp()
+    )
 }
