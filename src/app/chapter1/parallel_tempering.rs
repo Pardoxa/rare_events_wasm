@@ -1,5 +1,5 @@
 use core::f64;
-use std::{num::NonZeroU32, mem::swap};
+use std::{mem::swap, num::NonZeroU32};
 use num_traits::Signed;
 use sampling::HistU32Fast;
 use derivative::Derivative;
@@ -55,7 +55,16 @@ pub struct ParallelTemperingData
     step_once: bool,
     marker_cycle: Option<Box<dyn Iterator<Item=MarkerShape>>>,
     step_counter: u32,
-    color_cycle: Option<Box<dyn Iterator<Item=DarkLightColor>>>
+    color_cycle: Option<Box<dyn Iterator<Item=DarkLightColor>>>,
+    side_panel: SidePanelView
+}
+
+#[derive(Debug, Default)]
+pub enum SidePanelView{
+    Shown,
+    Hidden,
+    #[default]
+    Default
 }
 
 
@@ -204,202 +213,137 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
     }
     
     let is_dark_mode = ctx.style().visuals.dark_mode;
+    if matches!(data.side_panel, SidePanelView::Default){
+        let screen_width = ctx.screen_rect().width();
+        let is_desktop = screen_width > 600.0;
+        data.side_panel = if is_desktop{
+            SidePanelView::Shown
+        } else {
+            SidePanelView::Hidden
+        };
+    }
 
-    egui::SidePanel::left("ParallelLeft")
-        .show(
-            ctx, 
-            |ui|
-            {
-                ui.horizontal(
+    match data.side_panel{
+        SidePanelView::Shown => {
+            egui::SidePanel::left("ParallelLeft")
+                .show(
+                    ctx, 
                     |ui|
                     {
-                        ui.add(Label::new("Temperature"));
-                        ui.add(egui::DragValue::new(&mut data.temperature_to_add)
-                                .speed(0.01)
-                            ).on_hover_text("Click to type a number. Or drag the value for quick changes.");
-                    }
-                );
-
-                if data.temperatures.is_empty(){
-                    ui.horizontal(
-                        |ui|
-                        {
-                            ui.label("number of Coins");
-                            ui.add(
-                                egui::DragValue::new(&mut data.num_coins)
-                            );
+                        if ui.button("Hide Side Panel").clicked() {
+                            data.side_panel = SidePanelView::Hidden;
                         }
-                    );
-
-                    ui.horizontal(
-                        |ui|
-                        {
-                            ui.label("Seed");
-                            ui.add(DragValue::new(&mut data.seed));
-                        }
-                    );
-
-                    data.rng = Some(
-                        Pcg64::seed_from_u64(data.seed)
-                    );
-                }
-                
-                let add_btn = ui.add(Button::new("add temperature"));
-
-
-                if data.temperature_to_add == 0.0 {
-                    add_btn.show_tooltip_text("We divide by the temperature in the formula for the acceptance probability. Thus 0 is an invalid temperature.");
-                }
-                else if add_btn
-                    .clicked()
-                {
-                    let to_add = data.temperature_to_add;
-                    if !data.contains_temp(to_add){
-                        data.temperatures.push(
-                            Temperature::new(
-                                data.temperature_to_add,
-                                data.num_coins,
-                                data.rng.as_mut().unwrap(),
-                                data.marker_cycle.as_mut()
-                                    .unwrap()
-                                    .next()
-                                    .unwrap(),
-                                data.color_cycle
-                                    .as_mut()
-                                    .unwrap()
-                                    .next()
-                                    .unwrap()
-                            )
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.add(Label::new("Temperature"));
+                                ui.add(egui::DragValue::new(&mut data.temperature_to_add)
+                                        .speed(0.01)
+                                    ).on_hover_text("Click to type a number. Or drag the value for quick changes.");
+                            }
                         );
-                        data.sort_temps();
-                    }
                     
-                }
-
-        
-                
-                if !data.temperatures.is_empty() && ui.add(
-                        Button::new("Remove all Temperatures")
-                    ).clicked()
-                {
-                    // cannot be part of he next if statement,
-                    // that would result in a bug
-                    data.temperatures.clear();
-                    data.step_counter = 0;
-                }
-                
-                if !data.temperatures.is_empty(){
-                    let txt = if data.paused{
-                        "continue"
-                    } else {
-                        "pause"
-                    };
-                    if ui.add(
-                        Button::new(txt)
-                    ).clicked() {
-                        data.paused = !data.paused;
-                    }
-
-                    if data.paused && ui.add(Button::new("step once")).clicked(){
-                        data.step_once = true;
-                    }
-
-                    ui.label("Adjust temperatures:");
-
-                    
-                    // Adjust top temperature
-                    let mut iter = data.temperatures
-                        .iter_mut()
-                        .rev();
-                    let tmp = iter.next().unwrap();
-  
-                    
-                    if let Some(next_tmp) = iter.next(){
-                        let other = next_tmp.temperature;
-                        if other.signum() == tmp.temperature.signum(){
-                            let range = if other.is_sign_negative(){
-                                other..=f64::NEG_INFINITY
-                            } else {
-                                f64::EPSILON..=other
-                            };
-                            let widget = DragValue::new(&mut tmp.temperature)
-                                .speed(0.1)
-                                .range(range);
-                            ui.horizontal(
-                            |ui|
-                                {
-                                    ui.label("Top:");
-                                    ui.add(widget);
-                                }
-                            );
-                        } else {
-                            let range = f64::EPSILON..=f64::INFINITY;
-                            let widget = DragValue::new(&mut tmp.temperature)
-                                .speed(0.1)
-                                .range(range);
-                            ui.horizontal(
-                            |ui|
-                                {
-                                    ui.label("Top:");
-                                    ui.add(widget);
-                                }
-                            );
-                        }
-                    }
-
-
-                    // Adjusting Clamped temperatures. Has been debugged already
-                    let current_temperatures: Vec<_> = data.temperatures
-                        .iter()
-                        .map(|t| t.temperature)
-                        .collect();
-
-                    let windows = current_temperatures.windows(3);
-                    let temperature_iter = data.temperatures
-                        .iter_mut()
-                        .skip(1);
-
-                    for (window, temperature) in windows.zip(temperature_iter).rev()
-                    {
-                        let min = window[0].min(window[2]);
-                        let max = window[2].max(window[0]);
-                        if max.signum() == min.signum() {
+                        if data.temperatures.is_empty(){
                             ui.horizontal(
                                 |ui|
                                 {
+                                    ui.label("number of Coins");
                                     ui.add(
-                                        Slider::new(&mut temperature.temperature, min..=max)
+                                        egui::DragValue::new(&mut data.num_coins)
                                     );
                                 }
                             );
-                        } else{
-                            let range = if window[1].is_sign_negative(){
-                                f64::NEG_INFINITY..=min
-                            } else {
-                                max..=f64::INFINITY
-                            };
-                            // No slider possible because one of the borders is infinite
-                            ui.add(
-                                DragValue::new(&mut temperature.temperature)
-                                    .range(range)
+                        
+                            ui.horizontal(
+                                |ui|
+                                {
+                                    ui.label("Seed");
+                                    ui.add(DragValue::new(&mut data.seed));
+                                }
+                            );
+                        
+                            data.rng = Some(
+                                Pcg64::seed_from_u64(data.seed)
                             );
                         }
-                        
-                    }
 
-                    // Adjusting bottom temperature
-                    let mut iter = data.temperatures.iter_mut();
-                    let tmp = iter.next().unwrap();
-  
-                    match iter.next(){
-                        Some(next_tmp) => {
-                            let other = next_tmp.temperature;
-                            match other.signum() == tmp.temperature.signum(){
-                                true => {
+                        let add_btn = ui.add(Button::new("add temperature"));
+                    
+                    
+                        if data.temperature_to_add == 0.0 {
+                            add_btn.show_tooltip_text("We divide by the temperature in the formula for the acceptance probability. Thus 0 is an invalid temperature.");
+                        }
+                        else if add_btn
+                            .clicked()
+                        {
+                            let to_add = data.temperature_to_add;
+                            if !data.contains_temp(to_add){
+                                data.temperatures.push(
+                                    Temperature::new(
+                                        data.temperature_to_add,
+                                        data.num_coins,
+                                        data.rng.as_mut().unwrap(),
+                                        data.marker_cycle.as_mut()
+                                            .unwrap()
+                                            .next()
+                                            .unwrap(),
+                                        data.color_cycle
+                                            .as_mut()
+                                            .unwrap()
+                                            .next()
+                                            .unwrap()
+                                    )
+                                );
+                                data.sort_temps();
+                            }
+
+                        }
+                    
+                    
+
+                        if !data.temperatures.is_empty() && ui.add(
+                                Button::new("Remove all Temperatures")
+                            ).clicked()
+                        {
+                            // cannot be part of he next if statement,
+                            // that would result in a bug
+                            data.temperatures.clear();
+                            data.step_counter = 0;
+                        }
+
+                        if !data.temperatures.is_empty(){
+                            let txt = if data.paused{
+                                "continue"
+                            } else {
+                                "pause"
+                            };
+                            if ui.add(
+                                Button::new(txt)
+                            ).clicked() {
+                                data.paused = !data.paused;
+                            }
+                        
+                            if data.paused && ui.add(Button::new("step once")).clicked(){
+                                data.step_once = true;
+                            }
+                        
+                            ui.label("Adjust temperatures:");
+                        
+
+                            // Adjust top temperature
+                            let mut iter = data.temperatures
+                                .iter_mut()
+                                .rev();
+                            let tmp = iter.next().unwrap();
+                        
+
+                            if let Some(next_tmp) = iter.next(){
+                                let other = next_tmp.temperature;
+                                if other.signum() == tmp.temperature.signum(){
                                     let range = if other.is_sign_negative(){
-                                        other..=(-f64::EPSILON)
+                                        other..=f64::NEG_INFINITY
                                     } else {
-                                        other..=f64::INFINITY
+                                        f64::EPSILON..=other
                                     };
                                     let widget = DragValue::new(&mut tmp.temperature)
                                         .speed(0.1)
@@ -407,43 +351,134 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                     ui.horizontal(
                                     |ui|
                                         {
-                                            ui.label("Bottom:");
+                                            ui.label("Top:");
                                             ui.add(widget);
                                         }
                                     );
-                                },
-                                false => {
-                                    let range = -f64::EPSILON..=f64::NEG_INFINITY;
+                                } else {
+                                    let range = f64::EPSILON..=f64::INFINITY;
                                     let widget = DragValue::new(&mut tmp.temperature)
                                         .speed(0.1)
                                         .range(range);
                                     ui.horizontal(
                                     |ui|
                                         {
-                                            ui.label("Bottom:");
+                                            ui.label("Top:");
                                             ui.add(widget);
                                         }
                                     );
                                 }
                             }
-                        },
-                        None => {
-                            let widget = DragValue::new(&mut tmp.temperature)
-                                .speed(0.1);
-                            ui.horizontal(
-                                |ui|
-                                {
-                                    ui.label("Adjust:");
-                                    ui.add(widget);
+                        
+                        
+                            // Adjusting Clamped temperatures. Has been debugged already
+                            let current_temperatures: Vec<_> = data.temperatures
+                                .iter()
+                                .map(|t| t.temperature)
+                                .collect();
+                        
+                            let windows = current_temperatures.windows(3);
+                            let temperature_iter = data.temperatures
+                                .iter_mut()
+                                .skip(1);
+                        
+                            for (window, temperature) in windows.zip(temperature_iter).rev()
+                            {
+                                let min = window[0].min(window[2]);
+                                let max = window[2].max(window[0]);
+                                if max.signum() == min.signum() {
+                                    ui.horizontal(
+                                        |ui|
+                                        {
+                                            ui.add(
+                                                Slider::new(&mut temperature.temperature, min..=max)
+                                            );
+                                        }
+                                    );
+                                } else{
+                                    let range = if window[1].is_sign_negative(){
+                                        f64::NEG_INFINITY..=min
+                                    } else {
+                                        max..=f64::INFINITY
+                                    };
+                                    // No slider possible because one of the borders is infinite
+                                    ui.add(
+                                        DragValue::new(&mut temperature.temperature)
+                                            .range(range)
+                                    );
                                 }
-                            );
+
+                            }
+                        
+                            // Adjusting bottom temperature
+                            let mut iter = data.temperatures.iter_mut();
+                            let tmp = iter.next().unwrap();
+                        
+                            match iter.next(){
+                                Some(next_tmp) => {
+                                    let other = next_tmp.temperature;
+                                    match other.signum() == tmp.temperature.signum(){
+                                        true => {
+                                            let range = if other.is_sign_negative(){
+                                                other..=(-f64::EPSILON)
+                                            } else {
+                                                other..=f64::INFINITY
+                                            };
+                                            let widget = DragValue::new(&mut tmp.temperature)
+                                                .speed(0.1)
+                                                .range(range);
+                                            ui.horizontal(
+                                            |ui|
+                                                {
+                                                    ui.label("Bottom:");
+                                                    ui.add(widget);
+                                                }
+                                            );
+                                        },
+                                        false => {
+                                            let range = -f64::EPSILON..=f64::NEG_INFINITY;
+                                            let widget = DragValue::new(&mut tmp.temperature)
+                                                .speed(0.1)
+                                                .range(range);
+                                            ui.horizontal(
+                                            |ui|
+                                                {
+                                                    ui.label("Bottom:");
+                                                    ui.add(widget);
+                                                }
+                                            );
+                                        }
+                                    }
+                                },
+                                None => {
+                                    let widget = DragValue::new(&mut tmp.temperature)
+                                        .speed(0.1);
+                                    ui.horizontal(
+                                        |ui|
+                                        {
+                                            ui.label("Adjust:");
+                                            ui.add(widget);
+                                        }
+                                    );
+                                }
+                            }
+                        
+                        
                         }
                     }
-
-
+                );
+        },
+        SidePanelView::Hidden => {
+            egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+                if ui.button("Open Side Panel").clicked() {
+                    data.side_panel = SidePanelView::Shown;
                 }
-            }
-        );
+            });
+        },
+        SidePanelView::Default => unreachable!()
+    }
+
+    
 
 
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -476,7 +511,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
         let plot_bounds = PlotBounds::from_min_max(
             [0.0, 0.0], 
-            [1.0, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
+            [1.0+f64::EPSILON, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
         );
 
         let y_axis = AxisHints::new_y()
@@ -501,7 +536,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
             );
 
         Plot::new("my_plot")
-            .x_axis_label("Number of Heads")
+            .x_axis_label("Heads rate")
             .show_y(false)
             .custom_y_axes(vec![y_axis])
             .show(
