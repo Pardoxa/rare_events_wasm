@@ -1,10 +1,10 @@
 use core::f64;
 use std::{mem::swap, num::NonZeroU32};
 use num_traits::Signed;
-use sampling::HistU32Fast;
+use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
-use egui::{Button, Color32, DragValue, Label, Slider};
-use egui_plot::{AxisHints, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
+use egui::{Button, Color32, DragValue, Grid, Label, Slider};
+use egui_plot::{AxisHints, BarChart, MarkerShape, Plot, PlotBounds, PlotPoints, Points, Bar};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
@@ -56,7 +56,8 @@ pub struct ParallelTemperingData
     marker_cycle: Option<Box<dyn Iterator<Item=MarkerShape>>>,
     step_counter: u32,
     color_cycle: Option<Box<dyn Iterator<Item=DarkLightColor>>>,
-    side_panel: SidePanelView
+    side_panel: SidePanelView,
+    plot_enum: PlotEnum
 }
 
 #[derive(Debug, Default)]
@@ -65,6 +66,13 @@ pub enum SidePanelView{
     Hidden,
     #[default]
     Default
+}
+
+#[derive(Default, Debug)]
+pub enum PlotEnum{
+    ShowHists,
+    #[default]
+    ShowPlot
 }
 
 
@@ -265,6 +273,14 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             data.rng = Some(
                                 Pcg64::seed_from_u64(data.seed)
                             );
+                        } else if
+                            ui.add(
+                                Button::new("Toggle")
+                            ).clicked() {
+                                match data.plot_enum{
+                                    PlotEnum::ShowHists => data.plot_enum = PlotEnum::ShowPlot,
+                                    PlotEnum::ShowPlot => data.plot_enum = PlotEnum::ShowHists
+                                }
                         }
 
                         let add_btn = ui.add(Button::new("add temperature"));
@@ -484,7 +500,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
     egui::CentralPanel::default().show(ctx, |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
 
-        let mut plot_points = Vec::new();
+        let mut plot_points: Vec<([f64; 2], (MarkerShape, DarkLightColor))> = Vec::new();
         let mut step_performed = false;
         for (id, temp) in data.temperatures.iter_mut().enumerate()
         {
@@ -496,62 +512,27 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
             plot_points.push(([heads_rate, id as f64], (temp.marker, temp.color)));
         }
 
-        let all_points = plot_points
-            .into_iter()
-            .map(
-                |(plot_data, plot_config)|
-                {
-                    let plot_points = PlotPoints::new(vec![plot_data]);
-                    Points::new(plot_points)
-                        .radius(10.0)
-                        .shape(plot_config.0)
-                        .color(plot_config.1.get_color(is_dark_mode))
-                }
-            );
+        match data.plot_enum{
+            PlotEnum::ShowPlot => {
+                
+                show_plot(
+                    data, 
+                    ui, 
+                    plot_points, 
+                    is_dark_mode
+                );
+            },
+            PlotEnum::ShowHists => {
+                show_hist(
+                    data, 
+                    ui,
+                    is_dark_mode
+                );
+            }
+        }
 
-        let plot_bounds = PlotBounds::from_min_max(
-            [0.0, 0.0], 
-            [1.0+f64::EPSILON, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
-        );
-
-        let y_axis = AxisHints::new_y()
-            .label("Temperature")
-            .formatter(
-                |mark, _|
-                {
-                    if mark.value.fract() < 0.01{
-                        let val = mark.value.round() as isize;
-                        if val >= 0 {
-                            match data.temperatures.get(val as usize){
-                                Some(tmp)  => tmp.temperature.to_string(),
-                                None => "".to_owned()
-                            }
-                        } else {
-                            "".to_string()
-                        }
-                    } else {
-                        "".to_owned()
-                    }
-                }
-            );
-
-        Plot::new("my_plot")
-            .x_axis_label("Heads rate")
-            .show_y(false)
-            .custom_y_axes(vec![y_axis])
-            .show(
-                ui, 
-                |plot_ui|
-                {
-                    for points in all_points{
-                        plot_ui.points(points);
-                    }
-                    plot_ui.set_plot_bounds(plot_bounds);
-                }
-            );
-        
         data.step_once = false;
-
+    
         if step_performed{
             data.step_counter += 1;
             if data.step_counter == data.num_coins.get(){
@@ -563,8 +544,119 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 );
             }
         }
-    });
+    });  
+
     ctx.request_repaint();
+}
+
+fn show_plot(
+    data: &ParallelTemperingData, 
+    ui: &mut egui::Ui,
+    plot_points: Vec<([f64; 2], (MarkerShape, DarkLightColor))>,
+    is_dark_mode: bool
+)
+{
+    let all_points = plot_points
+        .into_iter()
+        .map(
+            |(plot_data, plot_config)|
+            {
+                let plot_points = PlotPoints::new(vec![plot_data]);
+                Points::new(plot_points)
+                    .radius(10.0)
+                    .shape(plot_config.0)
+                    .color(plot_config.1.get_color(is_dark_mode))
+            }
+        );
+
+    let plot_bounds = PlotBounds::from_min_max(
+        [0.0, 0.0], 
+        [1.0+f64::EPSILON, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
+    );
+
+    let y_axis = AxisHints::new_y()
+        .label("Temperature")
+        .formatter(
+            |mark, _|
+            {
+                if mark.value.fract() < 0.01{
+                    let val = mark.value.round() as isize;
+                    if val >= 0 {
+                        match data.temperatures.get(val as usize){
+                            Some(tmp)  => tmp.temperature.to_string(),
+                            None => "".to_owned()
+                        }
+                    } else {
+                        "".to_string()
+                    }
+                } else {
+                    "".to_owned()
+                }
+            }
+        );
+
+    Plot::new("my_plot")
+        .x_axis_label("Heads rate")
+        .show_y(false)
+        .custom_y_axes(vec![y_axis])
+        .show(
+            ui, 
+            |plot_ui|
+            {
+                for points in all_points{
+                    plot_ui.points(points);
+                }
+                plot_ui.set_plot_bounds(plot_bounds);
+            }
+        );
+
+
+}
+
+fn show_hist(
+    data: &ParallelTemperingData, 
+    ui: &mut egui::Ui,
+    is_dark_mode: bool
+)
+{
+    let height = ui.max_rect().height();
+    let min_height = 0.99 * height / (data.temperatures.len() as f32);
+    Grid::new("HistGrid")
+        .num_columns(1)
+        .min_row_height(min_height)
+        .show(
+        ui, 
+        |ui|
+        {
+            for (id, temp) in data.temperatures.iter().enumerate(){
+        
+                let chart = BarChart::new(
+                    temp.hist
+                        .hist()
+                        .iter()
+                        .enumerate()
+                        .map(
+                            |(x, hits)|
+                            {
+                                Bar::new(x as f64, *hits as f64)
+                                    .width(1.0)
+                            }
+                        ).collect()
+                ).color(temp.color.get_color(is_dark_mode));
+
+                Plot::new(format!("{id}HISTPLOT"))
+                    .clamp_grid(true)
+                    .show(
+                        ui, 
+                        |plot_ui|
+                        {
+                            plot_ui.bar_chart(chart);
+                        }    
+                    );
+                ui.end_row();
+            }
+        }
+    );
 }
 
 
@@ -575,7 +667,7 @@ fn temp_exchanges(rng: &mut Pcg64, temperatures: &mut [Temperature])
     }
     let num_pairs = temperatures.len() - 1;
 
-    for _ in 0..1
+    for _ in 0..num_pairs
     {
         let lower = rng.gen_range(0..num_pairs);
         let mut iter = temperatures
