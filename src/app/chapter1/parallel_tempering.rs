@@ -75,7 +75,9 @@ pub enum ShowPlots{
     Hists,
     #[default]
     Plots,
-    Both
+    Both,
+    AcceptanceRate,
+    Everything
 }
 
 impl ShowPlots
@@ -85,6 +87,8 @@ impl ShowPlots
         ui.radio_value(self, ShowPlots::Plots, "Plot");
         ui.radio_value(self, Self::Hists, "Hist");
         ui.radio_value(self, Self::Both, "Hist and Plot");
+        ui.radio_value(self, Self::AcceptanceRate, "Acceptance-rate");
+        ui.radio_value(self, Self::Everything, "Everything");
     }
 }
 
@@ -157,9 +161,14 @@ impl AcceptanceCounter{
         self.rejected += 1;
     }
 
-    pub fn acceptance_rate(&mut self) -> f64
+    pub fn acceptance_rate(&self) -> f64
     {
         self.accepted as f64 / (self.accepted + self.rejected) as f64
+    }
+
+    pub fn reset(&mut self){
+        self.accepted = 0;
+        self.rejected = 0;
     }
 }
 
@@ -361,6 +370,22 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         }
 
                         if !data.temperatures.is_empty(){
+
+                            if ui.add(Button::new("Reset Histograms")).clicked()
+                            {
+                                data.temperatures.iter_mut()
+                                    .for_each(
+                                        |t| t.hist.reset()
+                                    );
+                            }
+                            if ui.add(Button::new("Reset Acceptance")).clicked()
+                            {
+                                data.temperatures.iter_mut()
+                                    .for_each(
+                                        |t| t.acceptance.reset()
+                                    );
+                            }
+
                             let txt = if data.paused{
                                 "continue"
                             } else {
@@ -533,17 +558,18 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
     egui::CentralPanel::default().show(ctx, |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
 
-        let mut plot_points: Vec<([f64; 2], (MarkerShape, DarkLightColor))> = Vec::new();
         let mut step_performed = false;
-        for (id, temp) in data.temperatures.iter_mut().enumerate()
-        {
-            if !data.paused || data.step_once{
-                temp.markov_step(data.rng.as_mut().unwrap());
-                step_performed = true;
-            }
-            let heads_rate = temp.heads_rate();
-            plot_points.push(([heads_rate, id as f64], (temp.marker, temp.color)));
+        if !data.paused || data.step_once{
+            let rng = data.rng.as_mut().unwrap();
+            data.temperatures
+                .iter_mut()
+                .for_each(
+                    |temp| temp.markov_step(rng)
+                );
+            // steps were performed if there was at least one config
+            step_performed = !data.temperatures.is_empty();
         }
+
 
         let mut rect = ui.max_rect();
 
@@ -552,8 +578,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 
                 show_plot(
                     data, 
-                    ui, 
-                    plot_points, 
+                    ui,
                     is_dark_mode,
                     rect
                 );
@@ -577,8 +602,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             {
                                 show_plot(
                                     data, 
-                                    ui, 
-                                    plot_points, 
+                                    ui,
                                     is_dark_mode,
                                     rect
                                 );
@@ -597,6 +621,58 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             }
                         );
                         
+                    }
+                );
+            },
+            ShowPlots::AcceptanceRate => {
+                show_acceptance_rate(
+                    data, 
+                    ui, 
+                    is_dark_mode, 
+                    rect
+                );
+            },
+            ShowPlots::Everything => {
+                let w = rect.width();
+                rect.set_width(w/3.1);
+                ui.horizontal(
+                    |ui|
+                    {
+                        ui.vertical(
+                            |ui|
+                            {
+                                show_plot(
+                                    data, 
+                                    ui,
+                                    is_dark_mode,
+                                    rect
+                                );
+                            }
+                        );
+
+                        ui.vertical(
+                            |ui|
+                            {
+                                show_hist(
+                                    data, 
+                                    ui,
+                                    is_dark_mode,
+                                    rect
+                                );
+                            }
+                        );
+                        
+                        ui.vertical(
+                            |ui|
+                            {
+                                show_acceptance_rate(
+                                    data, 
+                                    ui,
+                                    is_dark_mode,
+                                    rect
+                                );
+                            }
+                        );
                     }
                 );
             }
@@ -620,14 +696,91 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
     ctx.request_repaint();
 }
 
+fn show_acceptance_rate(
+    data: &ParallelTemperingData,
+    ui: &mut egui::Ui,
+    is_dark_mode: bool,
+    rect: Rect
+){
+    let mut plot_points = Vec::with_capacity(data.temperatures.len());
+    for (id, temp) in data.temperatures.iter().enumerate()
+    {
+        let acceptance_rate = temp.acceptance.acceptance_rate();
+        plot_points.push(([acceptance_rate, id as f64], (temp.marker, temp.color)));
+    }
+
+    let all_points = plot_points
+        .into_iter()
+        .map(
+            |(plot_data, plot_config)|
+            {
+                let plot_points = PlotPoints::new(vec![plot_data]);
+                Points::new(plot_points)
+                    .radius(10.0)
+                    .shape(plot_config.0)
+                    .color(plot_config.1.get_color(is_dark_mode))
+            }
+        );
+
+    let plot_bounds = PlotBounds::from_min_max(
+        [0.0, 0.0], 
+        [1.0+f64::EPSILON, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
+    );
+
+    let y_axis = AxisHints::new_y()
+        .label("Temperature")
+        .formatter(
+            |mark, _|
+            {
+                if mark.value.fract() < 0.01{
+                    let val = mark.value.round() as isize;
+                    if val >= 0 {
+                        match data.temperatures.get(val as usize){
+                            Some(tmp)  => tmp.temperature.to_string(),
+                            None => "".to_owned()
+                        }
+                    } else {
+                        "".to_string()
+                    }
+                } else {
+                    "".to_owned()
+                }
+            }
+        );
+
+    Plot::new("acc_plot")
+        .x_axis_label("Acceptance rate")
+        .show_y(false)
+        .custom_y_axes(vec![y_axis])
+        .width(rect.width())
+        .height(rect.height())
+        .show(
+            ui, 
+            |plot_ui|
+            {
+                for points in all_points{
+                    plot_ui.points(points);
+                }
+                plot_ui.set_plot_bounds(plot_bounds);
+            }
+        );
+}
+
+
 fn show_plot(
     data: &ParallelTemperingData, 
     ui: &mut egui::Ui,
-    plot_points: Vec<([f64; 2], (MarkerShape, DarkLightColor))>,
     is_dark_mode: bool,
     rect: Rect
 )
 {
+    let mut plot_points: Vec<([f64; 2], (MarkerShape, DarkLightColor))> = Vec::with_capacity(data.temperatures.len());
+    for (id, temp) in data.temperatures.iter().enumerate()
+    {
+        let heads_rate = temp.heads_rate();
+        plot_points.push(([heads_rate, id as f64], (temp.marker, temp.color)));
+    }
+
     let all_points = plot_points
         .into_iter()
         .map(
