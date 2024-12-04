@@ -391,36 +391,53 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     let mut iter = data.temperatures.iter_mut();
                     let tmp = iter.next().unwrap();
   
-                    
-                    if let Some(next_tmp) = iter.next(){
-                        let other = next_tmp.temperature;
-                        if other.signum() == tmp.temperature.signum(){
-                            let range = if other.is_sign_negative(){
-                                other..=(-f64::EPSILON)
-                            } else {
-                                other..=f64::INFINITY
-                            };
+                    match iter.next(){
+                        Some(next_tmp) => {
+                            let other = next_tmp.temperature;
+                            match other.signum() == tmp.temperature.signum(){
+                                true => {
+                                    let range = if other.is_sign_negative(){
+                                        other..=(-f64::EPSILON)
+                                    } else {
+                                        other..=f64::INFINITY
+                                    };
+                                    let widget = DragValue::new(&mut tmp.temperature)
+                                        .speed(0.1)
+                                        .range(range);
+                                    ui.horizontal(
+                                    |ui|
+                                        {
+                                            ui.label("Bottom:");
+                                            ui.add(widget);
+                                        }
+                                    );
+                                },
+                                false => {
+                                    let range = -f64::EPSILON..=f64::NEG_INFINITY;
+                                    let widget = DragValue::new(&mut tmp.temperature)
+                                        .speed(0.1)
+                                        .range(range);
+                                    ui.horizontal(
+                                    |ui|
+                                        {
+                                            ui.label("Bottom:");
+                                            ui.add(widget);
+                                        }
+                                    );
+                                }
+                            }
+                        },
+                        None => {
                             let widget = DragValue::new(&mut tmp.temperature)
-                                .speed(0.1)
-                                .range(range);
+                                .speed(0.1);
                             ui.horizontal(
-                            |ui|
-                            {
-                                ui.label("Bottom:");
-                                ui.add(widget);
-                            }
-                        );
+                                |ui|
+                                {
+                                    ui.label("Adjust:");
+                                    ui.add(widget);
+                                }
+                            );
                         }
-                    } else {
-                        let widget = DragValue::new(&mut tmp.temperature)
-                            .speed(0.1);
-                        ui.horizontal(
-                            |ui|
-                            {
-                                ui.label("Adjust:");
-                                ui.add(widget);
-                            }
-                        );
                     }
 
 
