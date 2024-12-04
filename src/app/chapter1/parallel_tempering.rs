@@ -140,13 +140,37 @@ impl Ord for SortHelper{
     }
 }
 
+#[derive(Debug, Default)]
+pub struct AcceptanceCounter{
+    accepted: u64,
+    rejected: u64
+}
+
+impl AcceptanceCounter{
+    pub fn count_acceptance(&mut self)
+    {
+        self.accepted += 1;
+    }
+    
+    pub fn count_rejected(&mut self)
+    {
+        self.rejected += 1;
+    }
+
+    pub fn acceptance_rate(&mut self) -> f64
+    {
+        self.accepted as f64 / (self.accepted + self.rejected) as f64
+    }
+}
+
 #[derive(Debug)]
 pub struct Temperature{
     temperature: f64,
     config: Vec<bool>,
     marker: MarkerShape,
     color: DarkLightColor,
-    hist: HistU32Fast
+    hist: HistU32Fast,
+    acceptance: AcceptanceCounter
 }
 
 impl Temperature{
@@ -170,6 +194,9 @@ impl Temperature{
             // we reject
             *entry = old_val;
             new_heads = old_heads;
+            self.acceptance.count_rejected();
+        } else {
+            self.acceptance.count_acceptance();
         }
         self.increment_hist(new_heads as u32);
     }
@@ -195,7 +222,8 @@ impl Temperature{
             config,
             marker,
             hist: HistU32Fast::new_inclusive(0, length.get()).unwrap(),
-            color
+            color,
+            acceptance: AcceptanceCounter::default()
         }
     }
 
@@ -219,6 +247,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
         let iter = markers
             .into_iter()
             .cycle();
+    
         data.marker_cycle = Some(
             Box::new(iter)
         );
