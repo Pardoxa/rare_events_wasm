@@ -59,7 +59,7 @@ pub struct ParallelTemperingData
     step_counter: u32,
     color_cycle: Option<Box<dyn Iterator<Item=DarkLightColor>>>,
     side_panel: SidePanelView,
-    plot_enum: PlotEnum
+    which_plot_to_show: ShowPlots
 }
 
 #[derive(Debug, Default)]
@@ -71,20 +71,20 @@ pub enum SidePanelView{
 }
 
 #[derive(Default, Debug, PartialEq)]
-pub enum PlotEnum{
-    ShowHists,
+pub enum ShowPlots{
+    Hists,
     #[default]
-    ShowPlot,
-    ShowBoth
+    Plots,
+    Both
 }
 
-impl PlotEnum
+impl ShowPlots
 {
     fn radio_btns(&mut self, ui: &mut egui::Ui)
     {
-        ui.radio_value(self, PlotEnum::ShowPlot, "Plot");
-        ui.radio_value(self, Self::ShowHists, "Hist");
-        ui.radio_value(self, Self::ShowBoth, "Hist and Plot");
+        ui.radio_value(self, ShowPlots::Plots, "Plot");
+        ui.radio_value(self, Self::Hists, "Hist");
+        ui.radio_value(self, Self::Both, "Hist and Plot");
     }
 }
 
@@ -317,7 +317,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 Pcg64::seed_from_u64(data.seed)
                             );
                         } else{
-                            data.plot_enum.radio_btns(ui);
+                            ui.label("Which plots to show:");
+                            data.which_plot_to_show.radio_btns(ui);
                         }
 
                         if !data.temperatures.is_empty() && ui.add(
@@ -517,8 +518,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
         let mut rect = ui.max_rect();
 
-        match data.plot_enum{
-            PlotEnum::ShowPlot => {
+        match data.which_plot_to_show{
+            ShowPlots::Plots => {
                 
                 show_plot(
                     data, 
@@ -528,7 +529,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     rect
                 );
             },
-            PlotEnum::ShowHists => {
+            ShowPlots::Hists => {
                 show_hist(
                     data, 
                     ui,
@@ -536,7 +537,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     rect
                 );
             },
-            PlotEnum::ShowBoth => {
+            ShowPlots::Both => {
                 let w = rect.width();
                 rect.set_width(w/2.0);
                 ui.horizontal(
