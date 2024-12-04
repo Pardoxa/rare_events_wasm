@@ -307,84 +307,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     ui.label("Adjust temperatures:");
 
                     
-                    // Adjusting lowest temperature
-                    let mut iter = data.temperatures.iter_mut();
-                    let tmp = iter.next().unwrap();
-  
-                    
-                    if let Some(next_tmp) = iter.next(){
-                        let other = next_tmp.temperature;
-                        if other.signum() == tmp.temperature.signum(){
-                            let range = if other.is_sign_negative(){
-                                other..=(-f64::EPSILON)
-                            } else {
-                                other..=f64::INFINITY
-                            };
-                            let widget = DragValue::new(&mut tmp.temperature)
-                                .speed(0.1)
-                                .range(range);
-                            ui.horizontal(
-                            |ui|
-                            {
-                                ui.label("Bottom:");
-                                ui.add(widget);
-                            }
-                        );
-                        }
-                    } else {
-                        let widget = DragValue::new(&mut tmp.temperature)
-                            .speed(0.1);
-                        ui.horizontal(
-                            |ui|
-                            {
-                                ui.label("Adjust:");
-                                ui.add(widget);
-                            }
-                        );
-                    }
-
-
-                    // Adjusting Clamped temperatures. Has been debugged already
-                    let current_temperatures: Vec<_> = data.temperatures
-                        .iter()
-                        .map(|t| t.temperature)
-                        .collect();
-
-                    let windows = current_temperatures.windows(3);
-                    let temperature_iter = data.temperatures
-                        .iter_mut()
-                        .skip(1);
-
-                    for (window, temperature) in windows.zip(temperature_iter)
-                    {
-                        let min = window[0].min(window[2]);
-                        let max = window[2].max(window[0]);
-                        if max.signum() == min.signum() {
-                            ui.horizontal(
-                                |ui|
-                                {
-                                    ui.add(
-                                        Slider::new(&mut temperature.temperature, min..=max)
-                                    );
-                                }
-                            );
-                        } else{
-                            let range = if window[1].is_sign_negative(){
-                                f64::NEG_INFINITY..=min
-                            } else {
-                                max..=f64::INFINITY
-                            };
-                            // No slider possible because one of the borders is infinite
-                            ui.add(
-                                DragValue::new(&mut temperature.temperature)
-                                    .range(range)
-                            );
-                        }
-                        
-                    }
-
-                    // Adjust highest temperature TO DEBUG!!!
-                    // Adjusting lowest temperature TO DEBUG!!!
+                    // Adjust top temperature
                     let mut iter = data.temperatures
                         .iter_mut()
                         .rev();
@@ -423,6 +346,84 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             );
                         }
                     }
+
+
+                    // Adjusting Clamped temperatures. Has been debugged already
+                    let current_temperatures: Vec<_> = data.temperatures
+                        .iter()
+                        .map(|t| t.temperature)
+                        .collect();
+
+                    let windows = current_temperatures.windows(3);
+                    let temperature_iter = data.temperatures
+                        .iter_mut()
+                        .skip(1);
+
+                    for (window, temperature) in windows.zip(temperature_iter).rev()
+                    {
+                        let min = window[0].min(window[2]);
+                        let max = window[2].max(window[0]);
+                        if max.signum() == min.signum() {
+                            ui.horizontal(
+                                |ui|
+                                {
+                                    ui.add(
+                                        Slider::new(&mut temperature.temperature, min..=max)
+                                    );
+                                }
+                            );
+                        } else{
+                            let range = if window[1].is_sign_negative(){
+                                f64::NEG_INFINITY..=min
+                            } else {
+                                max..=f64::INFINITY
+                            };
+                            // No slider possible because one of the borders is infinite
+                            ui.add(
+                                DragValue::new(&mut temperature.temperature)
+                                    .range(range)
+                            );
+                        }
+                        
+                    }
+
+                    // Adjusting bottom temperature
+                    let mut iter = data.temperatures.iter_mut();
+                    let tmp = iter.next().unwrap();
+  
+                    
+                    if let Some(next_tmp) = iter.next(){
+                        let other = next_tmp.temperature;
+                        if other.signum() == tmp.temperature.signum(){
+                            let range = if other.is_sign_negative(){
+                                other..=(-f64::EPSILON)
+                            } else {
+                                other..=f64::INFINITY
+                            };
+                            let widget = DragValue::new(&mut tmp.temperature)
+                                .speed(0.1)
+                                .range(range);
+                            ui.horizontal(
+                            |ui|
+                            {
+                                ui.label("Bottom:");
+                                ui.add(widget);
+                            }
+                        );
+                        }
+                    } else {
+                        let widget = DragValue::new(&mut tmp.temperature)
+                            .speed(0.1);
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.label("Adjust:");
+                                ui.add(widget);
+                            }
+                        );
+                    }
+
+
                 }
             }
         );
