@@ -84,6 +84,7 @@ pub struct SortHelper{
     temp: NotNan<f64>
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for SortHelper{
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         let o_positive = other.temp.signum() == 1.0;
@@ -306,7 +307,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     ui.label("Adjust temperatures:");
 
                     
-                    // Adjusting lowest temperature TO DEBUG!!!
+                    // Adjusting lowest temperature
                     let mut iter = data.temperatures.iter_mut();
                     let tmp = iter.next().unwrap();
   
@@ -325,7 +326,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             ui.horizontal(
                             |ui|
                             {
-                                ui.label("Inhibited:");
+                                ui.label("Bottom:");
                                 ui.add(widget);
                             }
                         );
@@ -336,7 +337,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         ui.horizontal(
                             |ui|
                             {
-                                ui.label("Uninhibited:");
+                                ui.label("Adjust:");
                                 ui.add(widget);
                             }
                         );
@@ -383,30 +384,46 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     }
 
                     // Adjust highest temperature TO DEBUG!!!
+                    // Adjusting lowest temperature TO DEBUG!!!
                     let mut iter = data.temperatures
                         .iter_mut()
                         .rev();
                     let tmp = iter.next().unwrap();
-
+  
                     
                     if let Some(next_tmp) = iter.next(){
-                        let widget = DragValue::new(&mut tmp.temperature)
-                            .speed(0.1);
-                        ui.horizontal(
+                        let other = next_tmp.temperature;
+                        if other.signum() == tmp.temperature.signum(){
+                            let range = if other.is_sign_negative(){
+                                other..=f64::NEG_INFINITY
+                            } else {
+                                f64::EPSILON..=other
+                            };
+                            let widget = DragValue::new(&mut tmp.temperature)
+                                .speed(0.1)
+                                .range(range);
+                            ui.horizontal(
                             |ui|
-                            {
-                                ui.label("Highest:");
-                                ui.add(widget);
-                            }
-                        );
-                        let min = next_tmp.temperature;
-                        let first_tmp = data.temperatures.last_mut().unwrap();
-                        //if first_tmp.temperature < min {
-                        //    first_tmp.temperature = min;
-                        //}
+                                {
+                                    ui.label("Top:");
+                                    ui.add(widget);
+                                }
+                            );
+                        } else {
+                            let range = f64::EPSILON..=f64::INFINITY;
+                            let widget = DragValue::new(&mut tmp.temperature)
+                                .speed(0.1)
+                                .range(range);
+                            ui.horizontal(
+                            |ui|
+                                {
+                                    ui.label("Top:");
+                                    ui.add(widget);
+                                }
+                            );
+                        }
                     }
                 }
-                    
             }
         );
 
