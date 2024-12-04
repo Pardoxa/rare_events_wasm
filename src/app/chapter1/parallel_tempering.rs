@@ -3,7 +3,7 @@ use std::{mem::swap, num::NonZeroU32};
 use num_traits::Signed;
 use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
-use egui::{Button, Color32, DragValue, Grid, Label, Slider};
+use egui::{Button, Color32, DragValue, Grid, Label, Rect, Slider};
 use egui_plot::{AxisHints, BarChart, MarkerShape, Plot, PlotBounds, PlotPoints, Points, Bar};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
@@ -38,6 +38,8 @@ const COLORS: [DarkLightColor; 7] = [
     DarkLightColor{dark: Color32::LIGHT_YELLOW, light: Color32::KHAKI},
 ];
 
+const DRAG_SPEED: f64 = 0.01;
+
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct ParallelTemperingData
@@ -68,11 +70,22 @@ pub enum SidePanelView{
     Default
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub enum PlotEnum{
     ShowHists,
     #[default]
-    ShowPlot
+    ShowPlot,
+    ShowBoth
+}
+
+impl PlotEnum
+{
+    fn radio_btns(&mut self, ui: &mut egui::Ui)
+    {
+        ui.radio_value(self, PlotEnum::ShowPlot, "Plot");
+        ui.radio_value(self, Self::ShowHists, "Hist");
+        ui.radio_value(self, Self::ShowBoth, "Hist and Plot");
+    }
 }
 
 
@@ -246,46 +259,12 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             {
                                 ui.add(Label::new("Temperature"));
                                 ui.add(egui::DragValue::new(&mut data.temperature_to_add)
-                                        .speed(0.01)
+                                        .speed(DRAG_SPEED)
                                     ).on_hover_text("Click to type a number. Or drag the value for quick changes.");
                             }
                         );
-                    
-                        if data.temperatures.is_empty(){
-                            ui.horizontal(
-                                |ui|
-                                {
-                                    ui.label("number of Coins");
-                                    ui.add(
-                                        egui::DragValue::new(&mut data.num_coins)
-                                    );
-                                }
-                            );
-                        
-                            ui.horizontal(
-                                |ui|
-                                {
-                                    ui.label("Seed");
-                                    ui.add(DragValue::new(&mut data.seed));
-                                }
-                            );
-                        
-                            data.rng = Some(
-                                Pcg64::seed_from_u64(data.seed)
-                            );
-                        } else if
-                            ui.add(
-                                Button::new("Toggle")
-                            ).clicked() {
-                                match data.plot_enum{
-                                    PlotEnum::ShowHists => data.plot_enum = PlotEnum::ShowPlot,
-                                    PlotEnum::ShowPlot => data.plot_enum = PlotEnum::ShowHists
-                                }
-                        }
 
                         let add_btn = ui.add(Button::new("add temperature"));
-                    
-                    
                         if data.temperature_to_add == 0.0 {
                             add_btn.show_tooltip_text("We divide by the temperature in the formula for the acceptance probability. Thus 0 is an invalid temperature.");
                         }
@@ -315,7 +294,31 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
                         }
                     
-                    
+                        if data.temperatures.is_empty(){
+                            ui.horizontal(
+                                |ui|
+                                {
+                                    ui.label("number of Coins");
+                                    ui.add(
+                                        egui::DragValue::new(&mut data.num_coins)
+                                    );
+                                }
+                            );
+                        
+                            ui.horizontal(
+                                |ui|
+                                {
+                                    ui.label("Seed");
+                                    ui.add(DragValue::new(&mut data.seed));
+                                }
+                            );
+                        
+                            data.rng = Some(
+                                Pcg64::seed_from_u64(data.seed)
+                            );
+                        } else{
+                            data.plot_enum.radio_btns(ui);
+                        }
 
                         if !data.temperatures.is_empty() && ui.add(
                                 Button::new("Remove all Temperatures")
@@ -362,7 +365,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                         f64::EPSILON..=other
                                     };
                                     let widget = DragValue::new(&mut tmp.temperature)
-                                        .speed(0.1)
+                                        .speed(DRAG_SPEED)
                                         .range(range);
                                     ui.horizontal(
                                     |ui|
@@ -374,7 +377,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 } else {
                                     let range = f64::EPSILON..=f64::INFINITY;
                                     let widget = DragValue::new(&mut tmp.temperature)
-                                        .speed(0.1)
+                                        .speed(DRAG_SPEED)
                                         .range(range);
                                     ui.horizontal(
                                     |ui|
@@ -441,7 +444,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                                 other..=f64::INFINITY
                                             };
                                             let widget = DragValue::new(&mut tmp.temperature)
-                                                .speed(0.1)
+                                                .speed(DRAG_SPEED)
                                                 .range(range);
                                             ui.horizontal(
                                             |ui|
@@ -454,7 +457,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                         false => {
                                             let range = -f64::EPSILON..=f64::NEG_INFINITY;
                                             let widget = DragValue::new(&mut tmp.temperature)
-                                                .speed(0.1)
+                                                .speed(DRAG_SPEED)
                                                 .range(range);
                                             ui.horizontal(
                                             |ui|
@@ -468,7 +471,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 },
                                 None => {
                                     let widget = DragValue::new(&mut tmp.temperature)
-                                        .speed(0.1);
+                                        .speed(DRAG_SPEED);
                                     ui.horizontal(
                                         |ui|
                                         {
@@ -512,6 +515,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
             plot_points.push(([heads_rate, id as f64], (temp.marker, temp.color)));
         }
 
+        let mut rect = ui.max_rect();
+
         match data.plot_enum{
             PlotEnum::ShowPlot => {
                 
@@ -519,14 +524,50 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     data, 
                     ui, 
                     plot_points, 
-                    is_dark_mode
+                    is_dark_mode,
+                    rect
                 );
             },
             PlotEnum::ShowHists => {
                 show_hist(
                     data, 
                     ui,
-                    is_dark_mode
+                    is_dark_mode,
+                    rect
+                );
+            },
+            PlotEnum::ShowBoth => {
+                let w = rect.width();
+                rect.set_width(w/2.0);
+                ui.horizontal(
+                    |ui|
+                    {
+                        ui.vertical(
+                            |ui|
+                            {
+                                show_plot(
+                                    data, 
+                                    ui, 
+                                    plot_points, 
+                                    is_dark_mode,
+                                    rect
+                                );
+                            }
+                        );
+
+                        ui.vertical(
+                            |ui|
+                            {
+                                show_hist(
+                                    data, 
+                                    ui,
+                                    is_dark_mode,
+                                    rect
+                                );
+                            }
+                        );
+                        
+                    }
                 );
             }
         }
@@ -553,7 +594,8 @@ fn show_plot(
     data: &ParallelTemperingData, 
     ui: &mut egui::Ui,
     plot_points: Vec<([f64; 2], (MarkerShape, DarkLightColor))>,
-    is_dark_mode: bool
+    is_dark_mode: bool,
+    rect: Rect
 )
 {
     let all_points = plot_points
@@ -599,6 +641,8 @@ fn show_plot(
         .x_axis_label("Heads rate")
         .show_y(false)
         .custom_y_axes(vec![y_axis])
+        .width(rect.width())
+        .height(rect.height())
         .show(
             ui, 
             |plot_ui|
@@ -616,19 +660,19 @@ fn show_plot(
 fn show_hist(
     data: &ParallelTemperingData, 
     ui: &mut egui::Ui,
-    is_dark_mode: bool
+    is_dark_mode: bool,
+    rect: Rect
 )
 {
-    let height = ui.max_rect().height();
-    let min_height = 0.99 * height / (data.temperatures.len() as f32);
+    let min_height = 0.99 * rect.height() / (data.temperatures.len() as f32);
     Grid::new("HistGrid")
-        .num_columns(1)
         .min_row_height(min_height)
+        .min_col_width(rect.width())
         .show(
         ui, 
         |ui|
         {
-            for (id, temp) in data.temperatures.iter().enumerate(){
+            for (id, temp) in data.temperatures.iter().rev().enumerate(){
         
                 let chart = BarChart::new(
                     temp.hist
