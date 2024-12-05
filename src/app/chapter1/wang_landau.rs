@@ -1,5 +1,8 @@
 use std::num::NonZeroU32;
 use egui::{Button, DragValue};
+use rand::{distributions::Uniform, prelude::Distribution, SeedableRng};
+use rand_pcg::Pcg64;
+use sampling::HistU32Fast;
 use statrs::distribution::{Binomial, Discrete};
 use crate::dark_magic::BoxedAnything;
 use std::f64::consts::LOG10_E;
@@ -11,27 +14,15 @@ use super::parallel_tempering::SidePanelView;
 #[derivative(Default)]
 pub struct WangLandauConfig
 {
+    /// How many coins to consider
     #[derivative(Default(value="NonZeroU32::new(100).unwrap()"))]
     coin_sequence_length: NonZeroU32,
-
+    /// Seed for random number generator
+    seed: u64,
     /// Contains Wang landau and true density
     simulation: Option<Simulation>,
-
+    /// Visibility of the side Panel
     side_panel: SidePanelView
-}
-
-#[derive(Debug)]
-pub struct Simulation{
-    true_density: Vec<f64>
-}
-
-impl Simulation{
-    pub fn new(num_coins: NonZeroU32) -> Self
-    {
-        Simulation { 
-            true_density: calc_true_log(num_coins) 
-        }
-    }
 }
 
 pub fn wang_landau_gui(
@@ -79,9 +70,22 @@ pub fn wang_landau_gui(
                                     Button::new("Create Simulation")
                                 ).clicked() {
                                     data.simulation = Some(
-                                        Simulation::new(data.coin_sequence_length)
-                                    )
+                                        Simulation::new(
+                                            data.coin_sequence_length,
+                                            data.seed
+                                        )
+                                    );
                                 }
+                                ui.horizontal(
+                                    |ui|
+                                    {
+                                        ui.label("Rng Seed:");
+                                        ui.add(
+                                            DragValue::new(&mut data.seed)
+                                                .speed(1)
+                                        );
+                                    }
+                                );
                             },
                             _ => {
                                 if ui.add(
@@ -111,13 +115,50 @@ pub fn wang_landau_gui(
     }
 }
 
-
-pub fn calc_true_log(
+fn calc_true_log(
     coin_sequence_length: NonZeroU32
 ) -> Vec<f64>
 {
-    let binomial = Binomial::new(0.5, coin_sequence_length.get() as u64).unwrap();
-    (0..coin_sequence_length.get())
-        .map(|k| LOG10_E*binomial.ln_pmf(k as u64))
+    let binomial = Binomial::new(0.5, coin_sequence_length.get() as u64)
+        .unwrap();
+    (0..coin_sequence_length.get() as u64)
+        .map(|k| LOG10_E * binomial.ln_pmf(k))
         .collect()
+}
+
+#[derive(Debug)]
+pub struct Simulation{
+    rng: Pcg64,
+    true_density: Vec<f64>,
+    simple_sample_hist: HistU32Fast
+}
+
+impl Simulation{
+    pub fn new(
+        num_coins: NonZeroU32,
+        seed: u64
+    ) -> Self
+    {
+        let rng = Pcg64::seed_from_u64(seed);
+        Simulation { 
+            true_density: calc_true_log(num_coins),
+            simple_sample_hist: HistU32Fast::new_inclusive(0, num_coins.get()).unwrap(),
+            rng
+        }
+    }
+
+    pub fn sample(
+        &mut self, 
+        rng: &mut Pcg64
+    )
+    {
+        let len = self.simple_sample_hist.right();
+        let uniform = Uniform::new_inclusive(0.0, 1.0);
+        let mut num_heads = 0;
+        uniform.sample_iter(rng)
+            .take(len as usize)
+            .filter(|&val| val > 0.5)
+            .for_each(|_| num_heads += 1);
+        self.simple_sample_hist.increment_quiet(num_heads as u32);
+    }
 }
