@@ -7,6 +7,7 @@ use statrs::distribution::{Binomial, Discrete};
 use crate::dark_magic::BoxedAnything;
 use std::f64::consts::LOG10_E;
 use derivative::Derivative;
+use sampling::WangLandau1T;
 
 use super::parallel_tempering::SidePanelView;
 
@@ -22,7 +23,9 @@ pub struct WangLandauConfig
     /// Contains Wang landau and true density
     simulation: Option<Simulation>,
     /// Visibility of the side Panel
-    side_panel: SidePanelView
+    side_panel: SidePanelView,
+    #[derivative(Default(value="0.0004"))]
+    threshold: f64
 }
 
 pub fn wang_landau_gui(
@@ -71,8 +74,7 @@ pub fn wang_landau_gui(
                                 ).clicked() {
                                     data.simulation = Some(
                                         Simulation::new(
-                                            data.coin_sequence_length,
-                                            data.seed
+                                            data
                                         )
                                     );
                                 }
@@ -95,7 +97,18 @@ pub fn wang_landau_gui(
                                 }
                             }
                         }
-
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.label("threshold");
+                                ui.add(
+                                    egui::Slider::new(
+                                        &mut data.threshold, 
+                                        0.00000000001..=0.001
+                                    ).logarithmic(true)
+                                );
+                            }
+                        )
 
                     }
                 );
@@ -135,14 +148,14 @@ pub struct Simulation{
 
 impl Simulation{
     pub fn new(
-        num_coins: NonZeroU32,
-        seed: u64
+        data: &WangLandauConfig
     ) -> Self
     {
-        let rng = Pcg64::seed_from_u64(seed);
+        let rng = Pcg64::seed_from_u64(data.seed);
+
         Simulation { 
-            true_density: calc_true_log(num_coins),
-            simple_sample_hist: HistU32Fast::new_inclusive(0, num_coins.get()).unwrap(),
+            true_density: calc_true_log(data.coin_sequence_length),
+            simple_sample_hist: HistU32Fast::new_inclusive(0, data.coin_sequence_length.get()).unwrap(),
             rng
         }
     }

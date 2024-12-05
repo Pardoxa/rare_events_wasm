@@ -6,6 +6,7 @@ mod first;
 mod second;
 mod parallel_tempering;
 mod wang_landau;
+mod coin_sequence_wl;
 
 pub fn chapter_1_switch(which: &Chapter1, any: &mut BoxedAnything, ctx: &egui::Context)
 {
