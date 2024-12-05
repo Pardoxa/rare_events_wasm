@@ -289,7 +289,9 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     ctx, 
                     |ui|
                     {
-                        if ui.button("Hide Side Panel").clicked() {
+                        if ui.button("Hide Side Panel")
+                            .on_hover_text("Will hide the side panel")
+                            .clicked() {
                             data.side_panel = SidePanelView::Hidden;
                         }
                         ui.horizontal(
@@ -328,6 +330,12 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                     )
                                 );
                                 data.sort_temps();
+                                loop{
+                                    data.temperature_to_add /= 2.0;
+                                    if !data.contains_temp(data.temperature_to_add){
+                                        break;
+                                    }
+                                }
                             }
 
                         }
@@ -339,7 +347,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                     ui.label("number of Coins");
                                     ui.add(
                                         egui::DragValue::new(&mut data.num_coins)
-                                    );
+                                    ).on_hover_text("Use this to change the size of the system, i.e., the number of coins. Only available when no Configurations exist yet, i.e., when you haven't added temperatures");
                                 }
                             );
                         
@@ -354,6 +362,24 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             data.rng = Some(
                                 Pcg64::seed_from_u64(data.seed)
                             );
+
+                            if ui.add(Button::new("Add Example Temperatures"))
+                                .on_hover_text("Add some example temperatures. Only available when currently no temperatures are selected.")
+                                .clicked()
+                            {
+                                let marker_iter = data.marker_cycle
+                                    .as_mut()
+                                    .unwrap();
+                                let color_iter = data.color_cycle
+                                    .as_mut()
+                                    .unwrap();
+                                let length = data.num_coins;
+                                let rng = data.rng
+                                    .as_mut()
+                                    .unwrap();
+                                data.temperatures = example_temperatures(marker_iter, color_iter, length, rng);
+                                data.sort_temps();
+                            }
                         } else{
                             ui.label("Which plots to show:");
                             data.which_plot_to_show.radio_btns(ui);
@@ -957,4 +983,41 @@ fn exchange_acceptance_probability(
         (-(1.0/a.temperature - 1.0/b.temperature) * (ea - eb))
             .exp()
     )
+}
+
+fn example_temperatures<Mi, Ci>(
+    marker_iter: &mut Mi,
+    color_iter: &mut Ci,
+    length: NonZeroU32,
+    rng: &mut Pcg64
+) -> Vec<Temperature>
+where Mi: Iterator<Item = MarkerShape>,
+    Ci: Iterator<Item = DarkLightColor>
+{
+    let default_temperatures = [
+        0.1,
+        0.01,
+        0.005,
+        0.0075,
+        -0.1,
+        -0.01,
+        -0.0075,
+        -0.005
+    ];
+
+    default_temperatures.iter()
+        .zip(marker_iter)
+        .zip(color_iter)
+        .map(
+            |((&temperature, marker), color)|
+            {
+                Temperature::new(
+                    temperature, 
+                    length, 
+                    rng, 
+                    marker, 
+                    color
+                )
+            }
+        ).collect()
 }
