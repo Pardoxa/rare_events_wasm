@@ -250,6 +250,9 @@ impl Temperature{
 
 pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 {
+    let is_dark_mode = ctx.style()
+        .visuals
+        .dark_mode;
     let data: &mut ParallelTemperingData = any.to_something_or_default_mut();
     if data.marker_cycle.is_none(){
         let markers: Vec<_> = MarkerShape::all().collect();
@@ -269,9 +272,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
         data.color_cycle = Some(
             Box::new(iter)
         );
-    }
+    } 
     
-    let is_dark_mode = ctx.style().visuals.dark_mode;
     if matches!(data.side_panel, SidePanelView::Default){
         let screen_width = ctx.screen_rect().width();
         let is_desktop = screen_width > 600.0;
