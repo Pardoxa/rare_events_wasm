@@ -1,5 +1,6 @@
 use std::num::NonZeroU32;
 use egui::{Button, CentralPanel, DragValue};
+use egui_plot::{Plot, PlotPoints, Points};
 use rand::{distributions::Uniform, prelude::Distribution, SeedableRng};
 use rand_pcg::Pcg64;
 use sampling::{HistU32Fast, Histogram, WangLandau};
@@ -29,8 +30,11 @@ pub struct WangLandauConfig
     /// Visibility of the side Panel
     side_panel: SidePanelView,
     #[derivative(Default(value="0.0004"))]
-    threshold: f64
+    threshold: f64,
+    /// Log or Linear?
+    display: DisplayState
 }
+
 
 pub fn wang_landau_gui(
     any: &mut BoxedAnything, 
@@ -56,10 +60,14 @@ pub fn wang_landau_gui(
                     |ui|
                     {
                         if ui.add(
-                            Button::new("Hide sidepanel")
+                            Button::new("Hide side panel")
                         ).clicked(){
                             data.side_panel = SidePanelView::Hidden;
                         }
+
+                        ui.label("Display mode:");
+                        ui.radio_value(&mut data.display, DisplayState::Linear, "Linear");
+                        ui.radio_value(&mut data.display, DisplayState::Log, "Logarithmic");
 
                         match data.simulation{
                             None => {
@@ -110,7 +118,7 @@ pub fn wang_landau_gui(
                                 ui.add(
                                     egui::Slider::new(
                                         &mut data.threshold, 
-                                        0.00000000001..=0.001
+                                        0.000000000001..=0.001
                                     ).logarithmic(true)
                                 );
                                 if old_threshold != data.threshold 
@@ -131,7 +139,7 @@ pub fn wang_landau_gui(
                     ctx, 
                     |ui| 
                     {
-                        if ui.button("Open Side Panel").clicked() {
+                        if ui.button("show side panel").clicked() {
                             data.side_panel = SidePanelView::Shown;
                         }
                     }
@@ -140,12 +148,65 @@ pub fn wang_landau_gui(
     }
 
     if let Some(sim) = data.simulation.as_mut(){
-
         CentralPanel::default().show(
             ctx, 
             |ui|
             {
-                let estimate = sim.wl.log_density_base10();
+                let mut estimate = sim.wl.log_density_base10();
+
+                sampling::norm_log10_sum_to_1(&mut estimate);
+
+                if data.display == DisplayState::Linear{
+                    estimate.iter_mut()
+                        .for_each(
+                            |val|
+                            {
+                                *val = 10.0_f64.powf(*val);
+                            }
+                        );
+                }
+
+                let plot_points = PlotPoints::new(
+                    estimate.into_iter()
+                        .enumerate()
+                        .map(
+                            |(idx, val)|
+                            [idx as f64, val]
+                        ).collect()
+                );
+                let points = Points::new(plot_points)
+                    .radius(5.0);
+
+                let true_density = match data.display{
+                    DisplayState::Linear => sim.true_density_lin.as_slice(),
+                    DisplayState::Log => &sim.true_density_log
+                };
+
+                let true_plot_points = PlotPoints::new(
+                    true_density
+                       .iter()
+                       .enumerate()
+                       .map(
+                            |(idx, val)|
+                            { 
+                                [idx as f64, *val]
+                            } 
+                       ).collect()
+                );
+                let true_points = Points::new(true_plot_points)
+                   .radius(5.0);
+
+                Plot::new("Wl_plot_HASH")
+                    .y_axis_label(data.display.get_y_label())
+                    .x_axis_label("Number of Heads")
+                    .show(
+                        ui,
+                        |plot_ui|
+                        {
+                            plot_ui.points(points);
+                            plot_ui.points(true_points);
+                        } 
+                    );
             }
         );
 
@@ -160,7 +221,7 @@ fn calc_true_log(
 {
     let binomial = Binomial::new(0.5, coin_sequence_length.get() as u64)
         .unwrap();
-    (0..coin_sequence_length.get() as u64)
+    (0..=coin_sequence_length.get() as u64)
         .map(|k| LOG10_E * binomial.ln_pmf(k))
         .collect()
 }
@@ -168,7 +229,8 @@ fn calc_true_log(
 #[derive(Debug)]
 pub struct Simulation{
     rng: Pcg64,
-    true_density: Vec<f64>,
+    true_density_log: Vec<f64>,
+    true_density_lin: Vec<f64>,
     simple_sample_hist: HistU32Fast,
     wl: ThisWl
 }
@@ -203,8 +265,15 @@ impl Simulation{
         wl.init_greedy_heuristic(energy_fn, None)
             .unwrap();
 
+        let true_density_log = calc_true_log(data.coin_sequence_length);
+        let true_density_lin = true_density_log
+            .iter()
+            .map(|val| 10.0_f64.powf(*val))
+            .collect();
+
         Simulation { 
-            true_density: calc_true_log(data.coin_sequence_length),
+            true_density_log,
+            true_density_lin,
             simple_sample_hist: HistU32Fast::new_inclusive(0, data.coin_sequence_length.get()).unwrap(),
             rng,
             wl
@@ -221,7 +290,7 @@ impl Simulation{
             |ensemble, step, old_energy| {
                 ensemble.update_head_count(step, old_energy)
             }, 
-            |_| {(time.elapsed().as_millis() as f32) < (10.0_f32)}
+            |_| {(time.elapsed().as_millis() as f32) < 5.0_f32}
         );
 
         let hist = self.simple_sample_hist.hist().as_slice();
@@ -247,4 +316,26 @@ impl Simulation{
 fn energy_fn(seq: &mut CoinFlipSequence::<Pcg64>) -> Option<u32>
 {
     Some(seq.head_count())
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub enum DisplayState{
+    #[default]
+    Log,
+    Linear
+}
+
+impl DisplayState
+{
+    fn get_y_label(&self) -> &str
+    {
+        match self{
+            Self::Linear => {
+                "Probability"
+            },
+            Self::Log => {
+                "Log10 of Probability"
+            }
+        }
+    }
 }
