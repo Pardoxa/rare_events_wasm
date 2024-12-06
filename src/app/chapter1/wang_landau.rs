@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 use egui::{Button, CentralPanel, DragValue};
-use egui_plot::{Plot, PlotPoints, Points};
+use egui_plot::{Legend, Plot, PlotPoints, Points};
 use rand::{distributions::Uniform, prelude::Distribution, SeedableRng};
 use rand_pcg::Pcg64;
 use sampling::{HistU32Fast, Histogram, WangLandau};
@@ -69,7 +69,7 @@ pub fn wang_landau_gui(
                         ui.radio_value(&mut data.display, DisplayState::Linear, "Linear");
                         ui.radio_value(&mut data.display, DisplayState::Log, "Logarithmic");
 
-                        match data.simulation{
+                        match data.simulation.as_ref(){
                             None => {
                                 ui.horizontal(
                                     |ui|
@@ -113,7 +113,7 @@ pub fn wang_landau_gui(
                         ui.horizontal(
                             |ui|
                             {
-                                ui.label("threshold");
+                                ui.label("Target threshold");
                                 let old_threshold = data.threshold;
                                 ui.add(
                                     egui::Slider::new(
@@ -127,8 +127,14 @@ pub fn wang_landau_gui(
                                         sim.wl.set_log_f_threshold(data.threshold).unwrap();
                                     }
                                 }
+                                
                             }
-                        )
+                        );
+                        if let Some(sim) = data.simulation.as_ref()
+                        {
+                            ui.label(format!("Current log f: {:e}", sim.wl.log_f()));
+                            ui.label(format!("Steps: {:e}", sim.wl.step_counter()));
+                        }
 
                     }
                 );
@@ -166,45 +172,38 @@ pub fn wang_landau_gui(
                         );
                 }
 
-                let plot_points = PlotPoints::new(
-                    estimate.into_iter()
-                        .enumerate()
-                        .map(
-                            |(idx, val)|
-                            [idx as f64, val]
-                        ).collect()
+                let points = slice_to_points(
+                    &estimate,
+                    "Wang Landau"
                 );
-                let points = Points::new(plot_points)
-                    .radius(5.0);
 
                 let true_density = match data.display{
                     DisplayState::Linear => sim.true_density_lin.as_slice(),
                     DisplayState::Log => &sim.true_density_log
                 };
 
-                let true_plot_points = PlotPoints::new(
-                    true_density
-                       .iter()
-                       .enumerate()
-                       .map(
-                            |(idx, val)|
-                            { 
-                                [idx as f64, *val]
-                            } 
-                       ).collect()
+                let true_points = slice_to_points(
+                    true_density,
+                    "Analytic"
                 );
-                let true_points = Points::new(true_plot_points)
-                   .radius(5.0);
+
+                let simple_estimate = sim.get_simple_sample_estimate(data.display);
+                let simple_points = slice_to_points(
+                    &simple_estimate,
+                    "Simple Sampling"
+                );
 
                 Plot::new("Wl_plot_HASH")
                     .y_axis_label(data.display.get_y_label())
                     .x_axis_label("Number of Heads")
+                    .legend(Legend::default())
                     .show(
                         ui,
                         |plot_ui|
                         {
                             plot_ui.points(points);
                             plot_ui.points(true_points);
+                            plot_ui.points(simple_points);
                         } 
                     );
             }
@@ -284,7 +283,6 @@ impl Simulation{
         &mut self
     )
     {
-        self.wl.wang_landau_step_acc(CoinFlipSequence::update_head_count);
         let time = Instant::now();
         self.wl.wang_landau_while_acc(
             |ensemble, step, old_energy| {
@@ -294,7 +292,7 @@ impl Simulation{
         );
 
         let hist = self.simple_sample_hist.hist().as_slice();
-        let len = hist.len();
+        let num_coins = hist.len() - 1;
         let simple_samples: usize = hist
             .iter()
             .sum();
@@ -304,12 +302,40 @@ impl Simulation{
         for _ in 0..missing_samples{
             let mut num_heads = 0;
             uniform.sample_iter(&mut self.rng)
-                .take(len)
+                .take(num_coins)
                 .filter(|&val| val <= 0.5)
                 .for_each(|_| num_heads += 1);
             self.simple_sample_hist.increment_quiet(num_heads);
         }
 
+    }
+
+    fn get_simple_sample_estimate(&self, display: DisplayState) -> Vec<f64>
+    {
+        let hist = self.simple_sample_hist
+            .hist()
+            .as_slice();
+        let total: usize = hist.iter().sum();
+        let factor = (total as f64).recip();
+        let mut estimate: Vec<_> = hist.iter()
+            .map(
+                |&val|
+                {
+                    val as f64 * factor
+                }
+            ).collect();
+        if display == DisplayState::Log {
+            estimate.iter_mut()
+                .for_each(
+                    |v| 
+                    if *v == 0.0 {
+                        *v = f64::NAN
+                    } else {
+                        *v = v.log10()
+                    }
+                );
+        }
+        estimate
     }
 }
 
@@ -318,7 +344,7 @@ fn energy_fn(seq: &mut CoinFlipSequence::<Pcg64>) -> Option<u32>
     Some(seq.head_count())
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum DisplayState{
     #[default]
     Log,
@@ -338,4 +364,22 @@ impl DisplayState
             }
         }
     }
+}
+
+fn slice_to_points(
+    slice: &[f64],
+    name: &str
+) -> Points
+{
+    let plot_points = PlotPoints::new(
+        slice.iter()
+            .enumerate()
+            .map(
+                |(idx, val)|
+                [idx as f64, *val]
+            ).collect()
+    );
+    Points::new(plot_points)
+        .radius(5.0)
+        .name(name)
 }
