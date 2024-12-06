@@ -88,10 +88,10 @@ impl<R> CoinFlipSequence<R>
     }
 
     /// * Calculate the head count, if a previouse head count of the ensemble and the 
-    /// markov steps leading to the current state are known
+    ///     markov steps leading to the current state are known
     /// * `head_count` is updated
     /// * might **panic** if `step` was not the markov step leading from the ensemble with `head_count`
-    /// to the current ensemble - if it does not panic, the result will be wrong
+    ///     to the current ensemble - if it does not panic, the result will be wrong
     pub fn update_head_count(&self, step: &CoinFlipMove, head_count: &mut u32)
     {
         match step.previous {
@@ -102,25 +102,6 @@ impl<R> CoinFlipSequence<R>
                 *head_count += 1;
             }
         }
-    }
-
-    /// Count many times `Head` occured in a row
-    /// * uses maximum value, i.e., for the sequence `HHTHHHT` it will return 3
-    pub fn max_heads_in_a_row(&self) -> usize
-    {
-        let mut current_heads = 0;
-        let mut max_heads = 0;
-        for flip in self.seq.iter()
-        {
-            match flip {
-                CoinFlip::Head => current_heads += 1,
-                CoinFlip::Tail => {
-                    max_heads = max_heads.max(current_heads);
-                    current_heads = 0;
-                }
-            }
-        }
-        max_heads.max(current_heads)
     }
 }
 
