@@ -25,7 +25,7 @@ impl CoinFlip
 #[derive(Clone, Debug)]
 /// Result of markov Step
 pub struct CoinFlipMove{
-    previouse: CoinFlip,
+    previous: CoinFlip,
     index: usize,
 }
 
@@ -78,11 +78,13 @@ impl<R> CoinFlipSequence<R>
 impl<R> CoinFlipSequence<R>
 {
     /// Count how often `Head` occurs in the Coin flip sequence
-    pub fn head_count(&self) -> usize
+    pub fn head_count(&self) -> u32
     {
+        let mut head_count = 0;
         self.seq.iter()
             .filter(|&item| *item == CoinFlip::Head)
-            .count()
+            .for_each(|_| head_count += 1);
+        head_count
     }
 
     /// * Calculate the head count, if a previouse head count of the ensemble and the 
@@ -90,9 +92,9 @@ impl<R> CoinFlipSequence<R>
     /// * `head_count` is updated
     /// * might **panic** if `step` was not the markov step leading from the ensemble with `head_count`
     /// to the current ensemble - if it does not panic, the result will be wrong
-    pub fn update_head_count(&self, step: &CoinFlipMove, head_count: &mut usize)
+    pub fn update_head_count(&self, step: &CoinFlipMove, head_count: &mut u32)
     {
-        match step.previouse {
+        match step.previous {
             CoinFlip::Head => {
                 *head_count -= 1;
             },
@@ -129,12 +131,12 @@ where R: Rng
     fn m_step(&mut self) -> CoinFlipMove {
         // draw a random position
         let pos = self.rng.gen_range(0..self.seq.len());
-        let previouse = self.seq[pos];
+        let previous = self.seq[pos];
         // flip coin at that position
         self.seq[pos].turn();
         // information to restore the previouse state
         CoinFlipMove{
-            previouse,
+            previous,
             index: pos
         }
     }
@@ -172,7 +174,7 @@ where R: Rng
     }
 
     fn undo_step(&mut self, step: &CoinFlipMove) {
-        self.seq[step.index] = step.previouse;
+        self.seq[step.index] = step.previous;
     }
 
     #[inline]
