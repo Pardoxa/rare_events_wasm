@@ -4,7 +4,7 @@ use num_traits::Signed;
 use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
 use egui::{Button, Color32, DragValue, Grid, Label, Rect, Slider};
-use egui_plot::{AxisHints, BarChart, MarkerShape, Plot, PlotBounds, PlotPoints, Points, Bar};
+use egui_plot::{AxisHints, Bar, BarChart, Legend, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
@@ -897,10 +897,12 @@ fn show_hist(
                                     .width(1.0)
                             }
                         ).collect()
-                ).color(temp.color.get_color(is_dark_mode));
+                ).color(temp.color.get_color(is_dark_mode))
+                .name(format!("T={}", temp.temperature));
 
                 Plot::new(format!("{id}HISTPLOT"))
                     .clamp_grid(true)
+                    .legend(Legend::default())
                     .show(
                         ui, 
                         |plot_ui|
