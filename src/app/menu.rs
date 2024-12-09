@@ -1,5 +1,7 @@
+use crate::misc::DarkLightColor;
+
 use super::chapter_markers::*;
-use egui::{Label, Sense};
+use egui::{Color32, Label, RichText, Sense, Window};
 use strum::IntoEnumIterator;
 
 pub trait MenuAction{
@@ -175,20 +177,55 @@ impl MenuOrSubMenu{
     }
 }
 
+#[derive(Default)]
+pub struct MenuOptions{
+    font_popup: bool,
+    pub anchor: ChapterAnchor
+}
 
 
-pub fn default_menu(ctx: &egui::Context, anchor: &mut ChapterAnchor)
+
+pub fn default_menu(
+    ctx: &egui::Context, 
+    opt: &mut MenuOptions
+)
 {
     egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
         // The top panel is often a good place for a menu bar:
-
         egui::menu::bar(ui, |ui| {
             // If I want to do different things in native or web-app
             // let is_web = cfg!(target_arch = "wasm32");
             let default_menu = GlobalContextMenu::default();
-            default_menu.nested_menu(ui, anchor);
+            default_menu.nested_menu(ui, &mut opt.anchor);
             
             egui::global_theme_preference_buttons(ui);
+            
+            let btn = match opt.font_popup{
+                true => "Hide font size hint",
+                false => "Show font size hint"
+            };
+
+            if ui.button(btn).clicked()
+            {
+                opt.font_popup = !opt.font_popup;
+            }
+            
+            Window::new("exp")
+                .fixed_pos([50., 50.])
+                .resizable(false)
+                .title_bar(false)
+                .open(&mut opt.font_popup)
+                .show(ctx, |ui| {
+
+                    let is_dark_mode = ctx.style().visuals.dark_mode;
+                    let txt1: RichText = "To increase the font size use 'ctrl' + '+'".into();
+                    let txt1 = txt1.color(Color32::RED);
+                    ui.label(txt1);
+                    let txt2: RichText = "To decrease the font size use 'ctrl' + '-'".into();
+                    let color2 = DarkLightColor{light: Color32::BLUE, dark: Color32::LIGHT_BLUE};
+                    let txt2 = txt2.color(color2.get_color(is_dark_mode));
+                    ui.label(txt2);
+                });
         });
     });
 }

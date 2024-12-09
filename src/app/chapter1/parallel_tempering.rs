@@ -9,24 +9,8 @@ use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
 use ordered_float::NotNan;
+use crate::misc::*;
 
-#[derive(Debug, Clone, Copy)]
-pub struct DarkLightColor
-{
-    dark: Color32,
-    light: Color32
-}
-
-impl DarkLightColor {
-    pub const fn get_color(&self, is_dark_mode: bool) -> Color32
-    {
-        if is_dark_mode{
-            self.dark
-        } else {
-            self.light
-        }
-    }
-}
 
 const COLORS: [DarkLightColor; 7] = [
     DarkLightColor{dark: Color32::LIGHT_RED, light: Color32::RED},

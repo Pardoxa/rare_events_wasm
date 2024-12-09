@@ -1,5 +1,6 @@
 use std::num::NonZeroU32;
 use egui::{Button, CentralPanel, DragValue};
+use crate::misc::*;
 use egui_plot::{Legend, Line, Plot, PlotPoints, Points};
 use rand::{distributions::Uniform, prelude::Distribution, SeedableRng};
 use rand_pcg::Pcg64;
@@ -204,10 +205,23 @@ pub fn wang_landau_gui(
                     data.simple_sample
                 );
 
+                let y_label = get_rich_text_size(
+                    data.display.get_y_label(), 
+                    15.0
+                );
+                let x_label = get_rich_text_size(
+                    "Number of Heads", 
+                    15.0
+                );
+
+                let legend = Legend::default()
+                    .text_style(egui::TextStyle::Heading);
+                
+
                 Plot::new("Wl_plot_HASH")
-                    .y_axis_label(data.display.get_y_label())
-                    .x_axis_label("Number of Heads")
-                    .legend(Legend::default())
+                    .y_axis_label(y_label)
+                    .x_axis_label(x_label)
+                    .legend(legend)
                     .show(
                         ui,
                         |plot_ui|
@@ -451,3 +465,4 @@ fn line_or_points_radio_btn(
         }
     );
 }
+

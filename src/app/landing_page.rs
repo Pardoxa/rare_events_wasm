@@ -2,10 +2,10 @@ use egui::FontDefinitions;
 
 use crate::{dark_magic::BoxedAnything, misc};
 
-use super::{chapter1, ChapterAnchor, GlobalContextMenu};
+use super::{chapter1, ChapterAnchor, GlobalContextMenu, MenuOptions};
 
 pub struct AppState {
-    pub anchor: ChapterAnchor,
+    pub menu_options: MenuOptions,
     pub text: String,
     pub anything: BoxedAnything
 }
@@ -23,7 +23,7 @@ impl AppState {
             FontDefinitions::default()
         );
         AppState{
-            anchor: ChapterAnchor::default(),
+            menu_options: MenuOptions::default(),
             text: String::new(),
             anything: BoxedAnything::new(())
         }
@@ -42,22 +42,22 @@ impl eframe::App for AppState {
 
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
-        let old_anchor = self.anchor;
+        let old_anchor = self.menu_options.anchor;
         #[cfg(target_arch = "wasm32")]
         if let Some(anchor) = _frame.info().web_info.location.hash.strip_prefix('#') {
-            self.anchor = match ChapterAnchor::read_str(anchor){
+            self.menu_options.anchor = match ChapterAnchor::read_str(anchor){
                 Some(a) => a,
                 None => ChapterAnchor::Index
             };
         }
-        self.text = format!("{:?}", self.anchor);
+        self.text = format!("{:?}", self.menu_options.anchor);
         
-        super::default_menu(ctx, &mut self.anchor);
+        super::default_menu(ctx, &mut self.menu_options);
 
-        if old_anchor == self.anchor{
+        if old_anchor == self.menu_options.anchor{
             // like this I can now get default values or the stored value, 
             // so I can use this to switch between them
-            match &self.anchor{
+            match &self.menu_options.anchor{
                 ChapterAnchor::Chapter1(which) => {
                     chapter1::chapter_1_switch(which, &mut self.anything, ctx);
                 },
@@ -67,16 +67,16 @@ impl eframe::App for AppState {
                     
                 },
                 ChapterAnchor::Index => {
-                    index_page(ctx, &mut self.anchor);
+                    index_page(ctx, &mut self.menu_options.anchor);
                 }
             }
         } 
 
-        if old_anchor != self.anchor {
+        if old_anchor != self.menu_options.anchor {
             #[cfg(target_arch = "wasm32")]
             if _frame.is_web()
             {
-                ctx.open_url(egui::OpenUrl::same_tab(self.anchor.get_string()))
+                ctx.open_url(egui::OpenUrl::same_tab(self.menu_options.anchor.get_string()))
             }
         }
         
