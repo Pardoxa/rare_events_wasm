@@ -3,7 +3,7 @@ use std::{mem::swap, num::NonZeroU32};
 use num_traits::Signed;
 use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
-use egui::{Button, Color32, DragValue, Grid, Label, Rect, Slider};
+use egui::{Button, Color32, DragValue, Grid, Label, Rect, Slider, Widget};
 use egui_plot::{AxisHints, Bar, BarChart, Legend, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
@@ -80,6 +80,22 @@ impl ParallelTemperingData{
             true
         } else {
             false
+        }
+    }
+
+    fn remove(&mut self, to_remove: ToRemove)
+    {
+        match to_remove{
+            ToRemove::Nothing => (),
+            ToRemove::Top => {
+                self.temperatures.pop();
+            },
+            ToRemove::Bottom => {
+                self.temperatures.remove(0);
+            }
+            ToRemove::Idx(idx) => {
+                self.temperatures.remove(idx);
+            }
         }
     }
 }
@@ -438,11 +454,31 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 .iter_mut()
                                 .rev();
                             let tmp = iter.next().unwrap();
-                        
+
+                            fn top<W>(
+                                ui: &mut egui::Ui, 
+                                widget: W
+                            ) -> ToRemove
+                            where W: Widget
+                            {
+                                let mut to_remove = ToRemove::Nothing;
+                                ui.horizontal(
+                                    |ui|
+                                    {
+                                        ui.label("Top:");
+                                        ui.add(widget);
+                                        if ui.button("🗑").clicked(){
+                                            to_remove = ToRemove::Top;
+                                        }
+                                    }
+                                );
+                                to_remove
+                            }
+                         
 
                             if let Some(next_tmp) = iter.next(){
                                 let other = next_tmp.temperature;
-                                if other.signum() == tmp.temperature.signum(){
+                                let to_remove = if other.signum() == tmp.temperature.signum(){
                                     let range = if other.is_sign_negative(){
                                         other..=f64::NEG_INFINITY
                                     } else {
@@ -451,26 +487,15 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                     let widget = DragValue::new(&mut tmp.temperature)
                                         .speed(DRAG_SPEED)
                                         .range(range);
-                                    ui.horizontal(
-                                    |ui|
-                                        {
-                                            ui.label("Top:");
-                                            ui.add(widget);
-                                        }
-                                    );
+                                    top(ui, widget)
                                 } else {
                                     let range = f64::EPSILON..=f64::INFINITY;
                                     let widget = DragValue::new(&mut tmp.temperature)
                                         .speed(DRAG_SPEED)
                                         .range(range);
-                                    ui.horizontal(
-                                    |ui|
-                                        {
-                                            ui.label("Top:");
-                                            ui.add(widget);
-                                        }
-                                    );
-                                }
+                                    top(ui, widget)
+                                };
+                                data.remove(to_remove);
                             }
                         
                         
@@ -480,13 +505,17 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 .map(|t| t.temperature)
                                 .collect();
                         
+                            let mut idx = data.temperatures.len() - 1;
                             let windows = current_temperatures.windows(3);
                             let temperature_iter = data.temperatures
                                 .iter_mut()
                                 .skip(1);
                         
+                            let mut to_remove = ToRemove::Nothing;
+                            
                             for (window, temperature) in windows.zip(temperature_iter).rev()
                             {
+                                idx -= 1;
                                 let min = window[0].min(window[2]);
                                 let max = window[2].max(window[0]);
                                 if max.signum() == min.signum() {
@@ -496,6 +525,9 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                             ui.add(
                                                 Slider::new(&mut temperature.temperature, min..=max)
                                             );
+                                            if ui.button("🗑").clicked(){
+                                                to_remove = ToRemove::Idx(idx);
+                                            }
                                         }
                                     );
                                 } else{
@@ -505,19 +537,48 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                         max..=f64::INFINITY
                                     };
                                     // No slider possible because one of the borders is infinite
-                                    ui.add(
-                                        DragValue::new(&mut temperature.temperature)
-                                            .range(range)
+                                    ui.horizontal(
+                                        |ui|
+                                        {
+                                            ui.add(
+                                                DragValue::new(&mut temperature.temperature)
+                                                    .range(range)
+                                            );
+                                            if ui.button("🗑").clicked(){
+                                                to_remove = ToRemove::Idx(idx);
+                                            }
+                                        }
                                     );
+                                    
                                 }
 
                             }
+                            data.remove(to_remove);
                         
                             // Adjusting bottom temperature
                             let mut iter = data.temperatures.iter_mut();
                             let tmp = iter.next().unwrap();
+                            fn bottom<W>(
+                                ui: &mut egui::Ui, 
+                                widget: W
+                            ) -> ToRemove
+                            where W: Widget
+                            {
+                                let mut to_remove = ToRemove::Nothing;
+                                ui.horizontal(
+                                    |ui|
+                                    {
+                                        ui.label("Bottom:");
+                                        ui.add(widget);
+                                        if ui.button("🗑").clicked(){
+                                            to_remove = ToRemove::Bottom;
+                                        }
+                                    }
+                                );
+                                to_remove
+                            }
                         
-                            match iter.next(){
+                            let to_remove = match iter.next(){
                                 Some(next_tmp) => {
                                     let other = next_tmp.temperature;
                                     match other.signum() == tmp.temperature.signum(){
@@ -530,41 +591,24 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                             let widget = DragValue::new(&mut tmp.temperature)
                                                 .speed(DRAG_SPEED)
                                                 .range(range);
-                                            ui.horizontal(
-                                            |ui|
-                                                {
-                                                    ui.label("Bottom:");
-                                                    ui.add(widget);
-                                                }
-                                            );
+                                            bottom(ui, widget)
                                         },
                                         false => {
                                             let range = -f64::EPSILON..=f64::NEG_INFINITY;
                                             let widget = DragValue::new(&mut tmp.temperature)
                                                 .speed(DRAG_SPEED)
                                                 .range(range);
-                                            ui.horizontal(
-                                            |ui|
-                                                {
-                                                    ui.label("Bottom:");
-                                                    ui.add(widget);
-                                                }
-                                            );
+                                            bottom(ui, widget)
                                         }
                                     }
                                 },
                                 None => {
                                     let widget = DragValue::new(&mut tmp.temperature)
                                         .speed(DRAG_SPEED);
-                                    ui.horizontal(
-                                        |ui|
-                                        {
-                                            ui.label("Adjust:");
-                                            ui.add(widget);
-                                        }
-                                    );
+                                    bottom(ui, widget)
                                 }
-                            }
+                            };
+                            data.remove(to_remove);
                         
                         
                         }
@@ -991,3 +1035,9 @@ fn exchange_acceptance_probability(
 }
 
 
+pub enum ToRemove{
+    Nothing,
+    Top,
+    Bottom,
+    Idx(usize)
+}
