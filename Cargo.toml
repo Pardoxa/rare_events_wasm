@@ -29,11 +29,11 @@ statrs = { version = "0.18.0", default-features = false}
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen-futures = "0.4.47"
+wasm-bindgen-futures = "0.4.49"
 getrandom = { version = "0.2.15", features = ["js"] }
 
 [build-dependencies]
-chrono = "0.4.38"
+chrono = "0.4.39"
 
 [profile.release]
 opt-level = 3 # fast and small wasm
