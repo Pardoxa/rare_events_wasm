@@ -22,6 +22,17 @@ const COLORS: [DarkLightColor; 7] = [
     DarkLightColor{dark: Color32::LIGHT_YELLOW, light: Color32::KHAKI},
 ];
 
+const DEFAULT_TEMPERATURES: [f64; 8] = [
+    0.1,
+    0.01,
+    0.005,
+    0.0075,
+    -0.1,
+    -0.01,
+    -0.0075,
+    -0.005
+];
+
 const DRAG_SPEED: f64 = 0.01;
 
 #[derive(Derivative)]
@@ -44,6 +55,33 @@ pub struct ParallelTemperingData
     color_cycle: Option<Box<dyn Iterator<Item=DarkLightColor>>>,
     side_panel: SidePanelView,
     which_plot_to_show: ShowPlots
+}
+
+impl ParallelTemperingData{
+    fn add_temperature(&mut self, to_add: f64) -> bool
+    {
+        if !self.contains_temp(to_add){
+            self.temperatures.push(
+                Temperature::new(
+                    to_add,
+                    self.num_coins,
+                    self.rng.as_mut().unwrap(),
+                    self.marker_cycle.as_mut()
+                        .unwrap()
+                        .next()
+                        .unwrap(),
+                    self.color_cycle
+                        .as_mut()
+                        .unwrap()
+                        .next()
+                        .unwrap()
+                )
+            );
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -298,23 +336,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             .clicked()
                         {
                             let to_add = data.temperature_to_add;
-                            if !data.contains_temp(to_add){
-                                data.temperatures.push(
-                                    Temperature::new(
-                                        data.temperature_to_add,
-                                        data.num_coins,
-                                        data.rng.as_mut().unwrap(),
-                                        data.marker_cycle.as_mut()
-                                            .unwrap()
-                                            .next()
-                                            .unwrap(),
-                                        data.color_cycle
-                                            .as_mut()
-                                            .unwrap()
-                                            .next()
-                                            .unwrap()
-                                    )
-                                );
+                            let added = data.add_temperature(to_add);
+                            if added{
                                 data.sort_temps();
                                 loop{
                                     data.temperature_to_add /= 2.0;
@@ -349,27 +372,21 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 Pcg64::seed_from_u64(data.seed)
                             );
 
-                            if ui.add(Button::new("Add Example Temperatures"))
-                                .on_hover_text("Add some example temperatures. Only available when currently no temperatures are selected.")
-                                .clicked()
-                            {
-                                let marker_iter = data.marker_cycle
-                                    .as_mut()
-                                    .unwrap();
-                                let color_iter = data.color_cycle
-                                    .as_mut()
-                                    .unwrap();
-                                let length = data.num_coins;
-                                let rng = data.rng
-                                    .as_mut()
-                                    .unwrap();
-                                data.temperatures = example_temperatures(marker_iter, color_iter, length, rng);
-                                data.sort_temps();
-                            }
+                            
                         } else{
                             ui.label("Which plots to show:");
                             data.which_plot_to_show.radio_btns(ui);
                         }
+
+                        if ui.add(Button::new("Add Example Temperatures"))
+                                .on_hover_text("Add some example temperatures. Only available when currently no temperatures are selected.")
+                                .clicked()
+                            {
+                                for tmp in DEFAULT_TEMPERATURES{
+                                    let _ = data.add_temperature(tmp);
+                                }
+                                data.sort_temps();
+                            }
 
                         if !data.temperatures.is_empty() && ui.add(
                                 Button::new("Remove all Temperatures")
@@ -973,39 +990,4 @@ fn exchange_acceptance_probability(
     )
 }
 
-fn example_temperatures<Mi, Ci>(
-    marker_iter: &mut Mi,
-    color_iter: &mut Ci,
-    length: NonZeroU32,
-    rng: &mut Pcg64
-) -> Vec<Temperature>
-where Mi: Iterator<Item = MarkerShape>,
-    Ci: Iterator<Item = DarkLightColor>
-{
-    let default_temperatures = [
-        0.1,
-        0.01,
-        0.005,
-        0.0075,
-        -0.1,
-        -0.01,
-        -0.0075,
-        -0.005
-    ];
 
-    default_temperatures.iter()
-        .zip(marker_iter)
-        .zip(color_iter)
-        .map(
-            |((&temperature, marker), color)|
-            {
-                Temperature::new(
-                    temperature, 
-                    length, 
-                    rng, 
-                    marker, 
-                    color
-                )
-            }
-        ).collect()
-}
