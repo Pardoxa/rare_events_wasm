@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 use egui::{Button, CentralPanel, DragValue};
-use egui_plot::{Legend, Plot, PlotPoints, Points};
+use egui_plot::{Legend, Line, Plot, PlotPoints, Points};
 use rand::{distributions::Uniform, prelude::Distribution, SeedableRng};
 use rand_pcg::Pcg64;
 use sampling::{HistU32Fast, Histogram, WangLandau};
@@ -32,7 +32,10 @@ pub struct WangLandauConfig
     #[derivative(Default(value="0.0004"))]
     threshold: f64,
     /// Log or Linear?
-    display: DisplayState
+    display: DisplayState,
+    analytic: LineOrPoints,
+    wang_landau: LineOrPoints,
+    simple_sample: LineOrPoints
 }
 
 
@@ -134,6 +137,10 @@ pub fn wang_landau_gui(
                         {
                             ui.label(format!("Current log f: {:e}", sim.wl.log_f()));
                             ui.label(format!("Steps: {:e}", sim.wl.step_counter()));
+
+                            line_or_points_radio_btn(ui, &mut data.analytic, "Analytic:");
+                            line_or_points_radio_btn(ui, &mut data.simple_sample, "Simple Sample:");
+                            line_or_points_radio_btn(ui, &mut data.wang_landau, "Wang Landau:");
                         }
 
                     }
@@ -172,9 +179,10 @@ pub fn wang_landau_gui(
                         );
                 }
 
-                let points = slice_to_points(
+                let wang_landau_estimate = slice_to_line_or_points(
                     &estimate,
-                    "Wang Landau"
+                    "Wang Landau",
+                    data.wang_landau
                 );
 
                 let true_density = match data.display{
@@ -182,15 +190,17 @@ pub fn wang_landau_gui(
                     DisplayState::Log => &sim.true_density_log
                 };
 
-                let true_points = slice_to_points(
+                let analytic_results = slice_to_line_or_points(
                     true_density,
-                    "Analytic"
+                    "Analytic",
+                    data.analytic
                 );
 
                 let simple_estimate = sim.get_simple_sample_estimate(data.display);
-                let simple_points = slice_to_points(
+                let simple_plot = slice_to_line_or_points(
                     &simple_estimate,
-                    "Simple Sampling"
+                    "Simple Sampling",
+                    data.simple_sample
                 );
 
                 Plot::new("Wl_plot_HASH")
@@ -201,9 +211,9 @@ pub fn wang_landau_gui(
                         ui,
                         |plot_ui|
                         {
-                            plot_ui.points(points);
-                            plot_ui.points(true_points);
-                            plot_ui.points(simple_points);
+                            wang_landau_estimate.plot(plot_ui);
+                            analytic_results.plot(plot_ui);
+                            simple_plot.plot(plot_ui);
                         } 
                     );
             }
@@ -366,10 +376,11 @@ impl DisplayState
     }
 }
 
-fn slice_to_points(
+fn slice_to_line_or_points(
     slice: &[f64],
-    name: &str
-) -> Points
+    name: &str,
+    line_or_points: LineOrPoints
+) -> LoP
 {
     let plot_points = PlotPoints::new(
         slice.iter()
@@ -379,7 +390,63 @@ fn slice_to_points(
                 [idx as f64, *val]
             ).collect()
     );
-    Points::new(plot_points)
-        .radius(5.0)
-        .name(name)
+
+    match line_or_points{
+        LineOrPoints::Points => {
+            let p = Points::new(plot_points)
+                .radius(5.0)
+                .name(name);
+            LoP::Points(p)
+        },
+        LineOrPoints::Line => {
+            let l = Line::new(plot_points)
+                .name(name)
+                .width(2.0);
+            LoP::Line(l)
+        }
+    }
+    
+}
+
+pub enum LoP{
+    Line(Line),
+    Points(Points)
+}
+
+impl LoP{
+    pub fn plot(self, plot_ui: &mut egui_plot::PlotUi){
+        match self
+        {
+            Self::Line(line) => {
+                plot_ui.line(line);
+            },
+            Self::Points(p) => {
+                plot_ui.points(p);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum LineOrPoints{
+    Line,
+    #[default]
+    Points
+}
+
+fn line_or_points_radio_btn(
+    ui: &mut egui::Ui,
+    current: &mut LineOrPoints,
+    name: &str
+
+)
+{
+    ui.horizontal(
+        |ui|
+        {
+            ui.label(name);
+            ui.radio_value(current, LineOrPoints::Line, "Line");
+            ui.radio_value(current, LineOrPoints::Points, "Points");
+        }
+    );
 }
