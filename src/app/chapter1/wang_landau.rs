@@ -80,7 +80,8 @@ pub fn wang_landau_gui(
                                         
                                         ui.label("Number of coins");
                                         ui.add(
-                                            DragValue::new(&mut data.coin_sequence_length)   
+                                            DragValue::new(&mut data.coin_sequence_length)
+                                                .range(1..=10000)
                                         );
                                     }
                                 );
