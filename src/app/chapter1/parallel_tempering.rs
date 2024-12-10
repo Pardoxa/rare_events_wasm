@@ -55,7 +55,7 @@ pub struct ParallelTemperingData
     step_once: bool,
     marker_cycle: Option<Box<dyn Iterator<Item=MarkerShape>>>,
     step_counter: u32,
-    color_cycle: Option<Box<dyn Iterator<Item=DarkLightColor>>>,
+    color_cycle: Option<Box<dyn Iterator<Item=u8>>>,
     side_panel: SidePanelView,
     #[derivative(Default(value="Show::Yes"))]
     show_plot: Show,
@@ -215,10 +215,10 @@ pub struct Temperature{
     temperature: f64,
     config: Vec<bool>,
     marker: MarkerShape,
-    color: DarkLightColor,
+    color: u8,
     hist: HistU32Fast,
     acceptance: AcceptanceCounter,
-    ring_buffer: RingBuffer<(DarkLightColor, u32)>
+    ring_buffer: RingBuffer<(u8, u32)>
 }
 
 impl Temperature{
@@ -285,7 +285,7 @@ impl Temperature{
         length: NonZeroU32, 
         rng: &mut Pcg64,
         marker: MarkerShape,
-        color: DarkLightColor
+        color: u8
     ) -> Self
     {
         let config = (0..length.get())
@@ -340,9 +340,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
     }
 
     if data.color_cycle.is_none(){
-        let iter = COLORS.iter()
-            .cycle()
-            .copied();
+        let iter = (0..COLORS.len() as u8)
+            .cycle();
         data.color_cycle = Some(
             Box::new(iter)
         );
@@ -795,7 +794,7 @@ fn show_acceptance_rate(
                 Points::new(plot_points)
                     .radius(10.0)
                     .shape(plot_config.0)
-                    .color(plot_config.1.get_color(is_dark_mode))
+                    .color(get_color(plot_config.1, is_dark_mode))
             }
         );
 
@@ -851,7 +850,7 @@ fn show_plot(
     rect: Rect
 )
 {
-    let mut plot_points: Vec<([f64; 2], (MarkerShape, DarkLightColor))> = Vec::with_capacity(data.temperatures.len());
+    let mut plot_points: Vec<([f64; 2], (MarkerShape, u8))> = Vec::with_capacity(data.temperatures.len());
     for (id, temp) in data.temperatures.iter().enumerate()
     {
         let heads_rate = temp.heads_rate();
@@ -867,7 +866,7 @@ fn show_plot(
                 Points::new(plot_points)
                     .radius(10.0)
                     .shape(plot_config.0)
-                    .color(plot_config.1.get_color(is_dark_mode))
+                    .color(get_color(plot_config.1, is_dark_mode))
             }
         );
 
@@ -950,7 +949,7 @@ fn show_history_plot(
                         if entry.1.0 != peeked.1.0 {
                             lines.push(
                                 Line::new(this_vec)
-                                    .color(entry.1.0.get_color(is_dark_mode))  
+                                    .color(get_color(entry.1.0, is_dark_mode))  
                             );
                             continue 'a;
                         } else{
@@ -960,7 +959,7 @@ fn show_history_plot(
                     } 
                     lines.push(
                         Line::new(this_vec)
-                            .color(entry.1.0.get_color(is_dark_mode))  
+                            .color(get_color(entry.1.0, is_dark_mode))  
                     );
 
                 }
@@ -1015,7 +1014,7 @@ fn show_hist(
                                     .width(1.0)
                             }
                         ).collect()
-                ).color(temp.color.get_color(is_dark_mode))
+                ).color(get_color(temp.color, is_dark_mode))
                 .name(format!("T={}", temp.temperature));
 
                 Plot::new(format!("{id}HISTPLOT"))
@@ -1156,4 +1155,9 @@ fn label(ui: &mut egui::Ui, name: &str, len: usize)
     let rich: RichText = this_str.into();
     let rich = rich.monospace();
     ui.label(rich);
+}
+
+fn get_color(idx: u8, is_dark_mode: bool) -> Color32
+{
+    COLORS[idx as usize].get_color(is_dark_mode)
 }
