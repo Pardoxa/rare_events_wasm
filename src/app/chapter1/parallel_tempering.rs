@@ -909,12 +909,38 @@ fn show_exchange_rate(
         [1.0+f64::EPSILON, (data.temperatures.len() as isize - 2).max(1) as f64 + 0.33]
     );
 
+    let y_labels: Vec<_> = data.temperatures.windows(2)
+        .map(|slice| format!("{} vs {}", slice[1].temperature, slice[0].temperature))
+        .collect();
+
+    let y_axis = AxisHints::new_y()
+    .label("Temperature")
+    .formatter(
+        |mark, _|
+        {
+            if mark.value.fract().abs() < 0.01{
+                let val = mark.value.round() as isize;
+                if val >= 0 {
+                    match y_labels.get(val as usize){
+                        Some(name)  => name.as_str(),
+                        None => ""
+                    }
+                } else {
+                    ""
+                }
+            } else {
+                ""
+            }.to_owned()
+        }
+    );
+
 
     Plot::new("Exchange_plot")
         .x_axis_label("Exchange rate")
         .show_y(false)
         .width(rect.width())
         .height(rect.height())
+        .custom_y_axes(vec![y_axis])
         .show(
             ui, 
             |plot_ui|
