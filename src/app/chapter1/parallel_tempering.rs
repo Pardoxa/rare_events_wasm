@@ -926,7 +926,7 @@ fn show_history_plot(
 )
 {
     let min_height = 0.99 * rect.height() / (data.temperatures.len() as f32);
-    Grid::new("HistGrid")
+    Grid::new("HistoryGrid")
         .min_row_height(min_height)
         .min_col_width(rect.width())
         .show(
