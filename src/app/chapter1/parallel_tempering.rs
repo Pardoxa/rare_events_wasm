@@ -122,8 +122,13 @@ impl ShowPlots
 {
     fn radio_btns(&mut self, ui: &mut egui::Ui)
     {
-        ui.radio_value(self, ShowPlots::Plots, "Plot");
-        ui.radio_value(self, Self::Hists, "Hist");
+        ui.horizontal(
+            |ui|
+            {
+                ui.radio_value(self, ShowPlots::Plots, "Plot");
+                ui.radio_value(self, Self::Hists, "Hist");
+            }
+        );
         ui.radio_value(self, Self::Both, "Hist and Plot");
         ui.radio_value(self, Self::AcceptanceRate, "Acceptance-rate");
         ui.radio_value(self, Self::Everything, "Everything");
@@ -372,7 +377,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                     ui.label("number of Coins");
                                     ui.add(
                                         egui::DragValue::new(&mut data.num_coins)
-                                    ).on_hover_text("Use this to change the size of the system, i.e., the number of coins. Only available when no Configurations exist yet, i.e., when you haven't added temperatures");
+                                    ).on_hover_text("Use this to change the size of the system, i.e., the number of coins. If all example temperatures are already present: Nothing happens when clicked.");
                                 }
                             );
                         
@@ -446,7 +451,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 data.step_once = true;
                             }
                         
-                            ui.label("Adjust temperatures:");
+                            ui.label("Adjust/delete temperatures:");
                         
 
                             // Adjust top temperature
@@ -868,8 +873,8 @@ fn show_plot(
         );
 
     let plot_bounds = PlotBounds::from_min_max(
-        [0.0, 0.0], 
-        [1.0+f64::EPSILON, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
+        [0.0, -0.33], 
+        [1.0+f64::EPSILON, (data.temperatures.len() - 1).max(1) as f64 + 0.33]
     );
 
     let y_axis = AxisHints::new_y()
@@ -877,11 +882,13 @@ fn show_plot(
         .formatter(
             |mark, _|
             {
-                if mark.value.fract() < 0.01{
+                if mark.value.fract().abs() < 0.01{
                     let val = mark.value.round() as isize;
                     if val >= 0 {
                         match data.temperatures.get(val as usize){
-                            Some(tmp)  => tmp.temperature.to_string(),
+                            Some(tmp)  => {
+                                tmp.temperature.to_string()
+                            },
                             None => "".to_owned()
                         }
                     } else {
