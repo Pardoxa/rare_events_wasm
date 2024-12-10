@@ -80,11 +80,10 @@ impl<R> CoinFlipSequence<R>
     /// Count how often `Head` occurs in the Coin flip sequence
     pub fn head_count(&self) -> u32
     {
-        let mut head_count = 0;
-        self.seq.iter()
+        self.seq
+            .iter()
             .filter(|&item| *item == CoinFlip::Head)
-            .for_each(|_| head_count += 1);
-        head_count
+            .count() as u32
     }
 
     /// * Calculate the head count, if a previouse head count of the ensemble and the 

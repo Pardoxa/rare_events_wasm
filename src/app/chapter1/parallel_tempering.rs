@@ -1,5 +1,5 @@
 use core::f64;
-use std::{mem::swap, num::NonZeroU32};
+use std::{mem::swap, num::{NonZeroU32, NonZeroUsize}};
 use num_traits::Signed;
 use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
@@ -236,7 +236,8 @@ pub struct Temperature{
     marker: MarkerShape,
     color: DarkLightColor,
     hist: HistU32Fast,
-    acceptance: AcceptanceCounter
+    acceptance: AcceptanceCounter,
+    ring_buffer: RingBuffer<u32>
 }
 
 impl Temperature{
@@ -287,7 +288,9 @@ impl Temperature{
         } else {
             self.acceptance.count_acceptance();
         }
-        self.increment_hist(new_heads as u32);
+        let new_heads = new_heads as u32;
+        self.ring_buffer.push(new_heads);
+        self.increment_hist(new_heads);
     }
 
     pub fn increment_hist(&mut self, val: u32)
@@ -312,18 +315,28 @@ impl Temperature{
             marker,
             hist: HistU32Fast::new_inclusive(0, length.get()).unwrap(),
             color,
-            acceptance: AcceptanceCounter::default()
+            acceptance: AcceptanceCounter::default(),
+            ring_buffer: RingBuffer::new(NonZeroUsize::new(2000).unwrap())
         }
     }
 
     pub fn number_of_heads(&self) -> isize
     {
-        self.config.iter().filter(|&s| *s).count() as isize
+        self.config
+            .iter()
+            .filter(|&s| *s)
+            .count() as isize
     }
 
     pub fn heads_rate(&self) -> f64
     {
         self.number_of_heads() as f64 / self.config.len() as f64
+    }
+
+    pub fn add_rejected_exchange_to_ringbuffer(
+        &mut self
+    ){
+        self.ring_buffer.repeat_last();
     }
 }
 
@@ -1020,6 +1033,9 @@ fn temp_exchanges(rng: &mut Pcg64, temperatures: &mut [Temperature])
         if exchange_prob >= rng.gen()
         {
             exchange_temperatures(a, b);
+        } else {
+            a.add_rejected_exchange_to_ringbuffer();
+            b.add_rejected_exchange_to_ringbuffer();
         }
     }
 }
@@ -1041,11 +1057,13 @@ fn exchange_temperatures(
         &mut b.color
     );
 
-    let ea = a.number_of_heads();
-    let eb = b.number_of_heads();
+    let ea = a.number_of_heads() as u32;
+    let eb = b.number_of_heads() as u32;
 
-    a.hist.increment_quiet(ea as u32);
-    b.hist.increment_quiet(eb as u32);
+    a.hist.increment_quiet(ea);
+    a.ring_buffer.push(ea);
+    b.hist.increment_quiet(eb);
+    b.ring_buffer.push(eb);
 }
 
 fn exchange_acceptance_probability(
