@@ -66,4 +66,9 @@ impl<T> RingBuffer<T>{
         }
         
     }
+
+    pub fn reset(&mut self)
+    {
+        self.buffer.clear();
+    }
 }

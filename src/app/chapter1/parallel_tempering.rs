@@ -3,8 +3,8 @@ use std::{mem::swap, num::{NonZeroU32, NonZeroUsize}};
 use num_traits::Signed;
 use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
-use egui::{Button, Color32, DragValue, Grid, Label, Rect, Slider, Widget};
-use egui_plot::{AxisHints, Bar, BarChart, Legend, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
+use egui::{Button, Color32, DragValue, Grid, Label, Rect, RichText, Slider, Widget};
+use egui_plot::{AxisHints, Bar, BarChart, Legend, Line, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
 use rand::{distributions::Uniform, prelude::Distribution, seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
@@ -33,6 +33,8 @@ const DEFAULT_TEMPERATURES: [f64; 8] = [
     -0.005
 ];
 
+const MONOSPACE_LEN: usize = 15;
+
 const DRAG_SPEED: f64 = 0.01;
 
 #[derive(Derivative)]
@@ -54,7 +56,11 @@ pub struct ParallelTemperingData
     step_counter: u32,
     color_cycle: Option<Box<dyn Iterator<Item=DarkLightColor>>>,
     side_panel: SidePanelView,
-    which_plot_to_show: ShowPlots
+    #[derivative(Default(value="Show::Yes"))]
+    show_plot: Show,
+    show_histogram: Show,
+    show_acceptance: Show,
+    show_history: Show
 }
 
 impl ParallelTemperingData{
@@ -122,32 +128,6 @@ pub enum SidePanelView{
     Default
 }
 
-#[derive(Default, Debug, PartialEq)]
-pub enum ShowPlots{
-    Hists,
-    #[default]
-    Plots,
-    Both,
-    AcceptanceRate,
-    Everything
-}
-
-impl ShowPlots
-{
-    fn radio_btns(&mut self, ui: &mut egui::Ui)
-    {
-        ui.horizontal(
-            |ui|
-            {
-                ui.radio_value(self, ShowPlots::Plots, "Plot");
-                ui.radio_value(self, Self::Hists, "Hist");
-            }
-        );
-        ui.radio_value(self, Self::Both, "Hist and Plot");
-        ui.radio_value(self, Self::AcceptanceRate, "Acceptance-rate");
-        ui.radio_value(self, Self::Everything, "Everything");
-    }
-}
 
 
 impl ParallelTemperingData{
@@ -262,6 +242,7 @@ impl Temperature{
         self.hist = HistU32Fast::new_inclusive(0, length.get())
             .unwrap();
         self.acceptance.reset();
+        self.ring_buffer.reset();
     }
 
     pub fn markov_step(&mut self, rng: &mut Pcg64)
@@ -437,8 +418,10 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         if !data.temperatures.is_empty(){
 
                             ui.label("Which plots to show:");
-                            data.which_plot_to_show.radio_btns(ui);
-
+                            data.show_plot.radio(ui, "Plot");
+                            data.show_histogram.radio(ui, "Histogram");
+                            data.show_acceptance.radio(ui, "Acceptance Rate");
+                            data.show_history.radio(ui, "History");
                             
                         } 
 
@@ -693,110 +676,67 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
         let mut rect = ui.max_rect();
 
-        match data.which_plot_to_show{
-            ShowPlots::Plots => {
-                
-                show_plot(
-                    data, 
-                    ui,
-                    is_dark_mode,
-                    rect
-                );
-            },
-            ShowPlots::Hists => {
-                show_hist(
-                    data, 
-                    ui,
-                    is_dark_mode,
-                    rect
-                );
-            },
-            ShowPlots::Both => {
-                let w = rect.width();
-                rect.set_width(w/2.0);
-                ui.horizontal(
-                    |ui|
-                    {
-                        ui.vertical(
-                            |ui|
-                            {
-                                show_plot(
-                                    data, 
-                                    ui,
-                                    is_dark_mode,
-                                    rect
-                                );
-                            }
-                        );
-
-                        ui.vertical(
-                            |ui|
-                            {
-                                show_hist(
-                                    data, 
-                                    ui,
-                                    is_dark_mode,
-                                    rect
-                                );
-                            }
-                        );
-                        
-                    }
-                );
-            },
-            ShowPlots::AcceptanceRate => {
-                show_acceptance_rate(
-                    data, 
-                    ui, 
-                    is_dark_mode, 
-                    rect
-                );
-            },
-            ShowPlots::Everything => {
-                let w = rect.width();
-                rect.set_width(w/3.1);
-                ui.horizontal(
-                    |ui|
-                    {
-                        ui.vertical(
-                            |ui|
-                            {
-                                show_plot(
-                                    data, 
-                                    ui,
-                                    is_dark_mode,
-                                    rect
-                                );
-                            }
-                        );
-
-                        ui.vertical(
-                            |ui|
-                            {
-                                show_hist(
-                                    data, 
-                                    ui,
-                                    is_dark_mode,
-                                    rect
-                                );
-                            }
-                        );
-                        
-                        ui.vertical(
-                            |ui|
-                            {
-                                show_acceptance_rate(
-                                    data, 
-                                    ui,
-                                    is_dark_mode,
-                                    rect
-                                );
-                            }
-                        );
-                    }
-                );
-            }
+        let mut amount = 0;
+        if data.show_plot.is_show(){
+            amount += 1;
         }
+        if data.show_acceptance.is_show(){
+            amount += 1;
+        }
+        if data.show_histogram.is_show(){
+            amount += 1;
+        }
+        if data.show_history.is_show(){
+            amount += 1;
+        }
+
+        let w = rect.width();
+        rect.set_width(w/(amount as f32 + 0.1));
+
+        ui.horizontal(
+            |ui|
+            {
+                if data.show_plot.is_show(){
+                    ui.vertical(
+                        |ui|
+                        {
+                            ui.label("Plot");
+                            show_plot(data, ui, is_dark_mode, rect);
+                        }
+                    );
+                }
+                if data.show_histogram.is_show(){
+                    ui.vertical(
+                        |ui|
+                        {
+                            ui.label("Histogram");
+                            show_hist(data, ui, is_dark_mode, rect);
+                        }
+                    );
+                }
+                if data.show_acceptance.is_show(){
+                    ui.vertical(
+                        |ui|
+                        {
+                            ui.label("Acceptance Rate");
+                            show_acceptance_rate(data, ui, is_dark_mode, rect);
+                        }
+                    );
+                }
+                if data.show_history.is_show(){
+                    ui.vertical(
+                        |ui|
+                        {
+                            ui.label("History");
+                            show_history_plot(data, ui, is_dark_mode, rect);
+                        }
+                    );
+                }
+            }
+        );
+
+
+        
 
         data.step_once = false;
     
@@ -962,6 +902,55 @@ fn show_plot(
 
 }
 
+fn show_history_plot(
+    data: &ParallelTemperingData, 
+    ui: &mut egui::Ui,
+    is_dark_mode: bool,
+    rect: Rect
+)
+{
+    let min_height = 0.99 * rect.height() / (data.temperatures.len() as f32);
+    Grid::new("HistGrid")
+        .min_row_height(min_height)
+        .min_col_width(rect.width())
+        .show(
+        ui, 
+        |ui|
+        {
+            for (id, temp) in data.temperatures.iter().rev().enumerate(){
+        
+                let line = Line::new(
+                    temp
+                        .ring_buffer
+                        .iter()
+                        .enumerate()
+                        .map(
+                            |(x, &heads)|
+                            {
+                                [x as f64, heads as f64]
+                            }
+                        ).collect::<Vec<_>>()
+                    ).name(format!("T={}", temp.temperature))
+                    .color(temp.color.get_color(is_dark_mode));
+
+                Plot::new(format!("{id}HISTPLOT"))
+                    .clamp_grid(true)
+                    .legend(Legend::default())
+                    .show(
+                        ui, 
+                        |plot_ui|
+                        {
+                            plot_ui.line(line);
+                        }    
+                    );
+                ui.end_row();
+            }
+        }
+    );
+
+
+}
+
 fn show_hist(
     data: &ParallelTemperingData, 
     ui: &mut egui::Ui,
@@ -1094,4 +1083,41 @@ pub enum ToRemove{
     Top,
     Bottom,
     Idx(usize)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Show{
+    Yes,
+    #[default]
+    No
+}
+
+impl Show{
+    pub fn radio(&mut self, ui: &mut egui::Ui, name: &str)
+    {
+        ui.horizontal(
+            |ui|
+            {
+                label(ui, name, MONOSPACE_LEN);
+                ui.radio_value(self, Self::Yes, "Y");
+                ui.radio_value(self, Self::No, "N");
+            }
+        );
+    }
+
+    pub fn is_show(&self) -> bool{
+        matches!(self, Self::Yes)
+    }
+}
+
+fn label(ui: &mut egui::Ui, name: &str, len: usize)
+{
+    let mut this_str = name.to_owned();
+    this_str.truncate(len);
+    while this_str.len() < len {
+        this_str.push(' ');
+    }
+    let rich: RichText = this_str.into();
+    let rich = rich.monospace();
+    ui.label(rich);
 }
