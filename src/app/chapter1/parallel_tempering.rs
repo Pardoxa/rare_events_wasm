@@ -1,5 +1,5 @@
 use core::f64;
-use std::{mem::swap, num::{NonZeroU32, NonZeroUsize}};
+use std::{collections::{BTreeMap, BTreeSet}, mem::swap, num::{NonZeroU32, NonZeroUsize}};
 use num_traits::Signed;
 use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
@@ -61,7 +61,11 @@ pub struct ParallelTemperingData
     show_plot: Show,
     show_histogram: Show,
     show_acceptance: Show,
-    show_history: Show
+    show_history: Show,
+    show_exchange_rate: Show,
+    #[derivative(Default(value="Box::new(0..)"))]
+    id_iter: Box<dyn Iterator<Item=u16>>,
+    pair_acceptance: PairAcceptance
 }
 
 impl ParallelTemperingData{
@@ -81,7 +85,8 @@ impl ParallelTemperingData{
                         .as_mut()
                         .unwrap()
                         .next()
-                        .unwrap()
+                        .unwrap(),
+                    self.id_iter.next().unwrap()
                 )
             );
             true
@@ -93,7 +98,7 @@ impl ParallelTemperingData{
     fn remove(&mut self, to_remove: ToRemove)
     {
         match to_remove{
-            ToRemove::Nothing => (),
+            ToRemove::Nothing => return,
             ToRemove::Top => {
                 self.temperatures.pop();
             },
@@ -104,6 +109,7 @@ impl ParallelTemperingData{
                 self.temperatures.remove(idx);
             }
         }
+        self.pair_acceptance.update_pairs(&self.temperatures);
     }
 
     fn new_length(
@@ -137,6 +143,7 @@ impl ParallelTemperingData{
         self.temperatures.sort_by_cached_key(
             |a| SortHelper{temp: NotNan::new(a.temperature).unwrap()}
         );
+        self.pair_acceptance.update_pairs(&self.temperatures);
     }
 
     pub fn contains_temp(&self, temp: f64) -> bool
@@ -218,7 +225,9 @@ pub struct Temperature{
     color: u8,
     hist: HistU32Fast,
     acceptance: AcceptanceCounter,
-    ring_buffer: RingBuffer<(u8, u32)>
+    ring_buffer: RingBuffer<(u8, u32)>,
+    // does not change with config changes!
+    temperature_id: u16
 }
 
 impl Temperature{
@@ -285,7 +294,8 @@ impl Temperature{
         length: NonZeroU32, 
         rng: &mut Pcg64,
         marker: MarkerShape,
-        color: u8
+        color: u8,
+        id: u16
     ) -> Self
     {
         let config = (0..length.get())
@@ -298,7 +308,8 @@ impl Temperature{
             hist: HistU32Fast::new_inclusive(0, length.get()).unwrap(),
             color,
             acceptance: AcceptanceCounter::default(),
-            ring_buffer: RingBuffer::new(NonZeroUsize::new(2000).unwrap())
+            ring_buffer: RingBuffer::new(NonZeroUsize::new(2000).unwrap()),
+            temperature_id: id
         }
     }
 
@@ -420,6 +431,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             data.show_plot.radio(ui, "Plot");
                             data.show_histogram.radio(ui, "Histogram");
                             data.show_acceptance.radio(ui, "Acceptance Rate");
+                            data.show_exchange_rate.radio(ui, "Exchange Rate");
                             data.show_history.radio(ui, "History");
                             
                         } 
@@ -688,6 +700,9 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
         if data.show_history.is_show(){
             amount += 1;
         }
+        if data.show_exchange_rate.is_show(){
+            amount += 1;
+        }
 
         let w = rect.width();
         rect.set_width(w/(amount as f32 + 0.1));
@@ -709,6 +724,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 }
                 if data.show_histogram.is_show(){
                     egui::ScrollArea::vertical()
+                        .max_height(smaller_rect.height())
+                        .min_scrolled_height(smaller_rect.height())
                         .show(
                             ui, 
                             |ui|
@@ -732,8 +749,20 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         }
                     );
                 }
+                if data.show_exchange_rate.is_show(){
+                    ui.vertical(
+                        |ui|
+                        {
+                            ui.label("Exchange Rate");
+                            show_exchange_rate(data, ui, smaller_rect);
+                        }
+                    );
+                }
+
                 if data.show_history.is_show(){
                     egui::ScrollArea::vertical()
+                    .max_height(smaller_rect.height())
+                    .min_scrolled_height(smaller_rect.height())
                     .show(
                         ui, 
                         |ui|
@@ -763,7 +792,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 data.step_counter = 0;
                 temp_exchanges(
                     &mut data.rng, 
-                    &mut data.temperatures
+                    &mut data.temperatures,
+                    &mut data.pair_acceptance
                 );
             }
         }
@@ -828,6 +858,61 @@ fn show_acceptance_rate(
         .x_axis_label("Acceptance rate")
         .show_y(false)
         .custom_y_axes(vec![y_axis])
+        .width(rect.width())
+        .height(rect.height())
+        .show(
+            ui, 
+            |plot_ui|
+            {
+                for points in all_points{
+                    plot_ui.points(points);
+                }
+                plot_ui.set_plot_bounds(plot_bounds);
+            }
+        );
+}
+
+fn show_exchange_rate(
+    data: &ParallelTemperingData,
+    ui: &mut egui::Ui,
+    rect: Rect
+){
+    let mut plot_points = Vec::with_capacity(data.temperatures.len());
+    for (id, temp_slice) in data.temperatures.windows(2).enumerate()
+    {
+        
+        let acceptance_rate = data.pair_acceptance
+            .get_pair_acceptance(temp_slice[0].temperature_id, temp_slice[1].temperature_id);
+        match acceptance_rate{
+            Some(acc) => {
+                plot_points.push([acc.acceptance_rate(), id as f64]);
+            },
+            None => {
+                plot_points.push([-1.0, id as f64]);
+            }
+        }
+    }
+
+    let all_points = plot_points
+        .into_iter()
+        .map(
+            |plot_data|
+            {
+                let plot_points = PlotPoints::new(vec![plot_data]);
+                Points::new(plot_points)
+                    .radius(10.0)
+            }
+        );
+
+    let plot_bounds = PlotBounds::from_min_max(
+        [0.0, -0.33], 
+        [1.0+f64::EPSILON, (data.temperatures.len() as isize - 2).max(1) as f64 + 0.33]
+    );
+
+
+    Plot::new("Exchange_plot")
+        .x_axis_label("Exchange rate")
+        .show_y(false)
         .width(rect.width())
         .height(rect.height())
         .show(
@@ -1035,7 +1120,11 @@ fn show_hist(
 }
 
 
-fn temp_exchanges(rng: &mut Pcg64, temperatures: &mut [Temperature])
+fn temp_exchanges(
+    rng: &mut Pcg64, 
+    temperatures: &mut [Temperature],
+    pair_acceptance: &mut PairAcceptance
+)
 {
     if temperatures.len() < 2{
         return;
@@ -1057,9 +1146,11 @@ fn temp_exchanges(rng: &mut Pcg64, temperatures: &mut [Temperature])
         if exchange_prob >= rng.gen()
         {
             exchange_temperatures(a, b);
+            pair_acceptance.count_acceptance(a.temperature_id, b.temperature_id);
         } else {
             a.add_rejected_exchange_to_ringbuffer();
             b.add_rejected_exchange_to_ringbuffer();
+            pair_acceptance.count_rejected(a.temperature_id, b.temperature_id);
         }
     }
 }
@@ -1160,4 +1251,72 @@ fn label(ui: &mut egui::Ui, name: &str, len: usize)
 fn get_color(idx: u8, is_dark_mode: bool) -> Color32
 {
     COLORS[idx as usize].get_color(is_dark_mode)
+}
+
+#[derive(Default)]
+pub struct PairAcceptance{
+    map: BTreeMap<(u16, u16), AcceptanceCounter>
+}
+
+impl PairAcceptance{
+    pub fn update_pairs(&mut self, temps: &[Temperature])
+    {
+        let retain_set: BTreeSet<_> = temps.windows(2)
+            .map(
+                |slice| 
+                {
+                    let a = slice[0].temperature_id;
+                    let b = slice[1].temperature_id;
+                    if a < b {
+                        (a, b)
+                    } else {
+                        (b, a)                    }
+                }
+            )
+            .collect();
+        let other_set: BTreeSet<_> = self.map
+            .keys()
+            .copied()
+            .collect();
+        for to_remove in other_set.difference(&retain_set){
+            self.map.remove(to_remove);
+        }
+        for to_add in retain_set.difference(&other_set)
+        {
+            self.map.insert(*to_add, AcceptanceCounter::default());
+        }
+    }
+
+    pub fn count_rejected(&mut self, id1: u16, id2: u16)
+    {
+        self.get_mut(id1, id2).count_rejected();
+    }
+
+    pub fn count_acceptance(&mut self, id1: u16, id2: u16){
+        self.get_mut(id1, id2).count_acceptance();
+    }
+
+    fn get_mut(&mut self, id1: u16, id2: u16) -> &mut AcceptanceCounter
+    {
+        let (a, b) = if id1 < id2 {
+            (id1, id2)
+        } else {
+            (id2, id1)
+        };
+        match self.map.get_mut(&(a,b))
+        {
+            None =>  unreachable!(),
+            Some(counter) =>  counter
+        }
+    }
+
+    pub fn get_pair_acceptance(&self, id1: u16, id2: u16) -> Option<&AcceptanceCounter>
+    {
+        let (a, b) = if id1 < id2 {
+            (id1, id2)
+        } else {
+            (id2, id1)
+        };
+        self.map.get(&(a,b))
+    }
 }
