@@ -5,7 +5,7 @@ use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
 use egui::{Button, Color32, DragValue, Grid, Label, Rect, Slider, Widget};
 use egui_plot::{AxisHints, Bar, BarChart, Legend, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
-use rand::{seq::SliceRandom, Rng, SeedableRng};
+use rand::{distributions::Uniform, prelude::Distribution, seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
 use ordered_float::NotNan;
@@ -46,8 +46,8 @@ pub struct ParallelTemperingData
     temperature_to_add: f64,
     #[derivative(Default(value="NonZeroU32::new(100).unwrap()"))]
     num_coins: NonZeroU32,
-    seed: u64,
-    rng: Option<Pcg64>,
+    #[derivative(Default(value="Pcg64::seed_from_u64(832147)"))]
+    rng: Pcg64,
     paused: bool,
     step_once: bool,
     marker_cycle: Option<Box<dyn Iterator<Item=MarkerShape>>>,
@@ -65,7 +65,7 @@ impl ParallelTemperingData{
                 Temperature::new(
                     to_add,
                     self.num_coins,
-                    self.rng.as_mut().unwrap(),
+                    &mut self.rng,
                     self.marker_cycle.as_mut()
                         .unwrap()
                         .next()
@@ -97,6 +97,20 @@ impl ParallelTemperingData{
                 self.temperatures.remove(idx);
             }
         }
+    }
+
+    fn new_length(
+        &mut self
+    )
+    {
+        self.temperatures
+            .iter_mut()
+            .for_each(
+                |temp|
+                {
+                    temp.adjust_length(self.num_coins, &mut self.rng);
+                }
+            );
     }
 }
 
@@ -226,6 +240,29 @@ pub struct Temperature{
 }
 
 impl Temperature{
+    pub fn adjust_length(
+        &mut self, 
+        length: NonZeroU32,
+        rng: &mut Pcg64
+    )
+    {
+        let length_usize = length.get() as usize;
+        if length_usize <= self.config.len(){
+            self.config.truncate(length_usize);
+        } else {
+            let missing = length_usize - self.config.len();
+            let uniform = Uniform::new_inclusive(0.0, 1.0);
+            self.config.extend(
+                uniform.sample_iter(rng)
+                    .take(missing)
+                    .map(|v| v <= 0.5)
+            );
+        }
+        self.hist = HistU32Fast::new_inclusive(0, length.get())
+            .unwrap();
+        self.acceptance.reset();
+    }
+
     pub fn markov_step(&mut self, rng: &mut Pcg64)
     {
         let len = self.config.len();
@@ -369,38 +406,31 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             }
 
                         }
-                    
-                        if data.temperatures.is_empty(){
-                            ui.horizontal(
-                                |ui|
-                                {
-                                    ui.label("number of Coins");
-                                    ui.add(
-                                        egui::DragValue::new(&mut data.num_coins)
-                                    ).on_hover_text("Use this to change the size of the system, i.e., the number of coins. If all example temperatures are already present: Nothing happens when clicked.");
-                                }
-                            );
-                        
-                            ui.horizontal(
-                                |ui|
-                                {
-                                    ui.label("Seed");
-                                    ui.add(DragValue::new(&mut data.seed));
-                                }
-                            );
-                        
-                            data.rng = Some(
-                                Pcg64::seed_from_u64(data.seed)
-                            );
 
-                            
-                        } else{
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.label("number of Coins");
+                                let old_num = data.num_coins;
+                                ui.add(
+                                    egui::DragValue::new(&mut data.num_coins)
+                                ).on_hover_text("Use this to change the size of the system, i.e., the number of coins. Will reset histograms etc. since the configurations are changed.");
+                                if old_num != data.num_coins && !data.temperatures.is_empty(){
+                                    data.new_length();
+                                }
+                            }
+                        );
+                    
+                        if !data.temperatures.is_empty(){
+
                             ui.label("Which plots to show:");
                             data.which_plot_to_show.radio_btns(ui);
-                        }
+
+                            
+                        } 
 
                         if ui.add(Button::new("Add Example Temperatures"))
-                                .on_hover_text("Add some example temperatures. Only available when currently no temperatures are selected.")
+                                .on_hover_text("Add some example temperatures. If all example temperatures are already present: Nothing happens when clicked.")
                                 .clicked()
                             {
                                 for tmp in DEFAULT_TEMPERATURES{
@@ -638,11 +668,10 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
         let mut step_performed = false;
         if !data.paused || data.step_once{
-            let rng = data.rng.as_mut().unwrap();
             data.temperatures
                 .iter_mut()
                 .for_each(
-                    |temp| temp.markov_step(rng)
+                    |temp| temp.markov_step(&mut data.rng)
                 );
             // steps were performed if there was at least one config
             step_performed = !data.temperatures.is_empty();
@@ -764,7 +793,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 // try exchanges
                 data.step_counter = 0;
                 temp_exchanges(
-                    data.rng.as_mut().unwrap(), 
+                    &mut data.rng, 
                     &mut data.temperatures
                 );
             }
