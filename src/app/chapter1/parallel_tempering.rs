@@ -949,9 +949,10 @@ fn show_history_plot(
                     ).name(format!("T={}", temp.temperature))
                     .color(temp.color.get_color(is_dark_mode));
 
-                Plot::new(format!("{id}HISTPLOT"))
+                Plot::new(format!("{id}PastPLOT"))
                     .clamp_grid(true)
                     .legend(Legend::default())
+                    .allow_scroll(false)
                     .show(
                         ui, 
                         |plot_ui|
@@ -1002,6 +1003,7 @@ fn show_hist(
                 Plot::new(format!("{id}HISTPLOT"))
                     .clamp_grid(true)
                     .legend(Legend::default())
+                    .allow_scroll(false)
                     .show(
                         ui, 
                         |plot_ui|
