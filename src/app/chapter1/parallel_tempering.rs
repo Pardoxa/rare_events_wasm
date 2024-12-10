@@ -321,7 +321,6 @@ impl Temperature{
     }
 }
 
-
 pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 {
     let is_dark_mode = ctx.style()
@@ -692,6 +691,9 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
         let w = rect.width();
         rect.set_width(w/(amount as f32 + 0.1));
+        let mut smaller_rect = rect;
+        let h = smaller_rect.height();
+        smaller_rect.set_height(h*0.95);
 
         ui.horizontal(
             |ui|
@@ -701,34 +703,48 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         |ui|
                         {
                             ui.label("Plot");
-                            show_plot(data, ui, is_dark_mode, rect);
+                            show_plot(data, ui, is_dark_mode, smaller_rect);
                         }
                     );
                 }
                 if data.show_histogram.is_show(){
-                    ui.vertical(
-                        |ui|
-                        {
-                            ui.label("Histogram");
-                            show_hist(data, ui, is_dark_mode, rect);
-                        }
-                    );
+                    egui::ScrollArea::vertical()
+                        .show(
+                            ui, 
+                            |ui|
+                            {
+                                ui.vertical(
+                                    |ui|
+                                    {
+                                        ui.label("Histogram");
+                                        show_hist(data, ui, is_dark_mode, smaller_rect);
+                                    }
+                                );
+                            }
+                        );
                 }
                 if data.show_acceptance.is_show(){
                     ui.vertical(
                         |ui|
                         {
                             ui.label("Acceptance Rate");
-                            show_acceptance_rate(data, ui, is_dark_mode, rect);
+                            show_acceptance_rate(data, ui, is_dark_mode, smaller_rect);
                         }
                     );
                 }
                 if data.show_history.is_show(){
-                    ui.vertical(
+                    egui::ScrollArea::vertical()
+                    .show(
+                        ui, 
                         |ui|
                         {
-                            ui.label("History");
-                            show_history_plot(data, ui, is_dark_mode, rect);
+                            ui.vertical(
+                                |ui|
+                                {
+                                    ui.label("History");
+                                    show_history_plot(data, ui, is_dark_mode, smaller_rect);
+                                }
+                            );
                         }
                     );
                 }
