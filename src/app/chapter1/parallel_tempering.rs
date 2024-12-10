@@ -799,8 +799,8 @@ fn show_acceptance_rate(
         );
 
     let plot_bounds = PlotBounds::from_min_max(
-        [0.0, 0.0], 
-        [1.0+f64::EPSILON, (data.temperatures.len() - 1).max(1) as f64 + 0.01]
+        [0.0, -0.33], 
+        [1.0+f64::EPSILON, (data.temperatures.len() - 1).max(1) as f64 + 0.33]
     );
 
     let y_axis = AxisHints::new_y()
@@ -808,7 +808,7 @@ fn show_acceptance_rate(
         .formatter(
             |mark, _|
             {
-                if mark.value.fract() < 0.01{
+                if mark.value.fract().abs() < 0.01{
                     let val = mark.value.round() as isize;
                     if val >= 0 {
                         match data.temperatures.get(val as usize){
