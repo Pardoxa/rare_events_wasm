@@ -12,7 +12,7 @@ use ordered_float::NotNan;
 use crate::misc::*;
 
 
-const COLORS: [DarkLightColor; 7] = [
+const COLORS: [DarkLightColor; 8] = [
     DarkLightColor{dark: Color32::LIGHT_RED, light: Color32::RED},
     DarkLightColor{dark: Color32::LIGHT_BLUE, light: Color32::BLUE},
     DarkLightColor{dark: Color32::ORANGE, light: Color32::ORANGE},
@@ -20,6 +20,7 @@ const COLORS: [DarkLightColor; 7] = [
     DarkLightColor{dark: Color32::YELLOW, light: Color32::GOLD},
     DarkLightColor{dark: Color32::LIGHT_GREEN, light: Color32::GREEN},
     DarkLightColor{dark: Color32::LIGHT_YELLOW, light: Color32::KHAKI},
+    DarkLightColor{dark: Color32::from_rgb(255, 0, 255), light: Color32::from_rgb(255, 0, 255)}
 ];
 
 const DEFAULT_TEMPERATURES: [f64; 8] = [
@@ -217,7 +218,7 @@ pub struct Temperature{
     color: DarkLightColor,
     hist: HistU32Fast,
     acceptance: AcceptanceCounter,
-    ring_buffer: RingBuffer<u32>
+    ring_buffer: RingBuffer<(DarkLightColor, u32)>
 }
 
 impl Temperature{
@@ -270,7 +271,7 @@ impl Temperature{
             self.acceptance.count_acceptance();
         }
         let new_heads = new_heads as u32;
-        self.ring_buffer.push(new_heads);
+        self.ring_buffer.push((self.color, new_heads));
         self.increment_hist(new_heads);
     }
 
@@ -935,19 +936,34 @@ fn show_history_plot(
         {
             for (id, temp) in data.temperatures.iter().rev().enumerate(){
         
-                let line = Line::new(
-                    temp
-                        .ring_buffer
-                        .iter()
-                        .enumerate()
-                        .map(
-                            |(x, &heads)|
-                            {
-                                [x as f64, heads as f64]
-                            }
-                        ).collect::<Vec<_>>()
-                    ).name(format!("T={}", temp.temperature))
-                    .color(temp.color.get_color(is_dark_mode));
+
+                let mut lines: Vec<Line> = Vec::new();
+                let mut iter = temp.ring_buffer
+                    .iter()
+                    .enumerate()
+                    .peekable();
+
+                'a: while let Some(mut entry) = iter.next(){
+                    let mut this_vec = Vec::new();
+                    this_vec.push([entry.0 as f64, entry.1.1 as f64]);
+                    while let Some(peeked) = iter.peek(){
+                        if entry.1.0 != peeked.1.0 {
+                            lines.push(
+                                Line::new(this_vec)
+                                    .color(entry.1.0.get_color(is_dark_mode))  
+                            );
+                            continue 'a;
+                        } else{
+                            entry = iter.next().unwrap();
+                            this_vec.push([entry.0 as f64, entry.1.1 as f64]);
+                        }
+                    } 
+                    lines.push(
+                        Line::new(this_vec)
+                            .color(entry.1.0.get_color(is_dark_mode))  
+                    );
+
+                }
 
                 Plot::new(format!("{id}PastPLOT"))
                     .clamp_grid(true)
@@ -957,7 +973,9 @@ fn show_history_plot(
                         ui, 
                         |plot_ui|
                         {
-                            plot_ui.line(line);
+                            for line in lines{
+                                plot_ui.line(line);
+                            }
                         }    
                     );
                 ui.end_row();
@@ -1068,9 +1086,9 @@ fn exchange_temperatures(
     let eb = b.number_of_heads() as u32;
 
     a.hist.increment_quiet(ea);
-    a.ring_buffer.push(ea);
+    a.ring_buffer.push((a.color, ea));
     b.hist.increment_quiet(eb);
-    b.ring_buffer.push(eb);
+    b.ring_buffer.push((b.color, eb));
 }
 
 fn exchange_acceptance_probability(

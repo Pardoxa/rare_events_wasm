@@ -15,7 +15,7 @@ pub fn get_rich_text_size(text: &str, size: f32) -> RichText
 }
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DarkLightColor
 {
     pub dark: Color32,
