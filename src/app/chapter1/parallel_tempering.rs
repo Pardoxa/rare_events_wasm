@@ -1,10 +1,10 @@
 use core::f64;
-use std::{collections::{BTreeMap, BTreeSet}, mem::swap, num::{NonZeroU32, NonZeroUsize}};
+use std::{collections::{BTreeMap, BTreeSet}, mem::swap, num::{NonZeroU32, NonZeroUsize}, u32};
 use num_traits::Signed;
 use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
 use egui::{Button, Color32, DragValue, Grid, Label, Rect, RichText, Slider, Widget, Window};
-use egui_plot::{AxisHints, Bar, BarChart, Legend, Line, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
+use egui_plot::{AxisHints, Bar, BarChart, Legend, Line, MarkerShape, Plot, PlotBounds, PlotPoint, PlotPoints, Points, Text};
 use rand::{distributions::Uniform, prelude::Distribution, seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
@@ -1085,9 +1085,14 @@ fn show_history_plot(
                     .zip(start..)
                     .peekable();
 
+                let mut maximum = 0;
+                let mut minimum = u32::MAX;
+
                 'a: while let Some(mut entry) = iter.next(){
                     let mut this_vec = Vec::new();
                     this_vec.push([entry.1 as f64, entry.0.1 as f64]);
+                    maximum = maximum.max(entry.0.1);
+                    minimum = minimum.min(entry.0.1);
                     while let Some(peeked) = iter.peek(){
                         if entry.0.0 != peeked.0.0 {
                             lines.push(
@@ -1097,6 +1102,8 @@ fn show_history_plot(
                             continue 'a;
                         } else{
                             entry = iter.next().unwrap();
+                            maximum = maximum.max(entry.0.1);
+                            minimum = minimum.min(entry.0.1);
                             this_vec.push([entry.1 as f64, entry.0.1 as f64]);
                         }
                     } 
@@ -1110,19 +1117,26 @@ fn show_history_plot(
                 let mut plot = Plot::new(format!("{id}PastPLOT"))
                     .clamp_grid(true)
                     .legend(Legend::default())
-                    .allow_scroll(false);
+                    .allow_scroll(false)
+                    .y_axis_label("Heads rate");
 
                 if id == 0 {
                     plot = plot.x_axis_label("time");
                 }
 
-                plot.show(
+                plot
+                    .show(
                         ui, 
                         |plot_ui|
                         {
                             for line in lines{
                                 plot_ui.line(line);
                             }
+                            let txt = format!("T={}", temp.temperature);
+                            let txt = get_rich_text_size(&txt, 15.);
+                            let y = minimum as f64 + (maximum - minimum) as f64 * 0.9;
+                            let txt = Text::new(PlotPoint::new(start as f64 * 0.8, y), txt);
+                            plot_ui.text(txt);
                         }    
                     );
                 ui.end_row();
@@ -1168,7 +1182,8 @@ fn show_hist(
                 let mut plot = Plot::new(format!("{id}HISTPLOT"))
                     .clamp_grid(true)
                     .legend(Legend::default())
-                    .allow_scroll(false);
+                    .allow_scroll(false)
+                    .y_axis_label("Hits");
 
                 if id == 0 {
                     plot = plot.x_axis_label("Number of Heads");
