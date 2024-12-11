@@ -3,7 +3,7 @@ use std::{collections::{BTreeMap, BTreeSet}, mem::swap, num::{NonZeroU32, NonZer
 use num_traits::Signed;
 use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
-use egui::{Button, Color32, DragValue, Grid, Label, Rect, RichText, Slider, Widget};
+use egui::{Button, Color32, DragValue, Grid, Label, Rect, RichText, Slider, Widget, Window};
 use egui_plot::{AxisHints, Bar, BarChart, Legend, Line, MarkerShape, Plot, PlotBounds, PlotPoints, Points};
 use rand::{distributions::Uniform, prelude::Distribution, seq::SliceRandom, Rng, SeedableRng};
 use rand_pcg::Pcg64;
@@ -65,7 +65,8 @@ pub struct ParallelTemperingData
     show_exchange_rate: Show,
     #[derivative(Default(value="Box::new(0..)"))]
     id_iter: Box<dyn Iterator<Item=u16>>,
-    pair_acceptance: PairAcceptance
+    pair_acceptance: PairAcceptance,
+    help: Show
 }
 
 impl ParallelTemperingData{
@@ -124,6 +125,16 @@ impl ParallelTemperingData{
                     temp.adjust_length(self.num_coins, &mut self.rng);
                 }
             );
+        self.pair_acceptance.reset_counts();
+    }
+
+    fn count_shown_plots(&self) -> u8
+    {
+        self.show_plot.to_num()
+            + self.show_acceptance.to_num()
+            + self.show_histogram.to_num()
+            + self.show_history.to_num()
+            + self.show_exchange_rate.to_num()
     }
 }
 
@@ -428,7 +439,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         if !data.temperatures.is_empty(){
 
                             ui.label("Which plots to show:");
-                            data.show_plot.radio(ui, "Plot");
+                            data.show_plot.radio(ui, "Heads rate");
                             data.show_histogram.radio(ui, "Histogram");
                             data.show_acceptance.radio(ui, "Acceptance Rate");
                             data.show_exchange_rate.radio(ui, "Exchange Rate");
@@ -650,9 +661,41 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 }
                             };
                             data.remove(to_remove);
-                        
-                        
                         }
+
+                        let txt = match data.help{
+                            Show::Yes => "Close Help",
+                            Show::No => "Show Help"
+                        };
+
+                        let toggle_btn = |ui: &mut egui::Ui, help: &mut Show|
+                        {
+                            if ui.button(txt).clicked()
+                            {
+                                help.toggle();
+                            }
+                        };
+
+                        toggle_btn(ui, &mut data.help);
+
+                        if data.help.is_show(){
+                            let color = if is_dark_mode{
+                                Color32::LIGHT_RED
+                            } else {
+                                Color32::RED
+                            };
+                            Window::new("Help")
+                                .resizable(true)
+                                .auto_sized()
+                                .show(ctx, |ui| {      
+                                    toggle_btn(ui, &mut data.help);                        
+                                    ui.label(PAR_TEMP_HELP_MSG);
+                                    let task: RichText = TASK.into();
+                                    let task = task.color(color);
+                                    ui.label(task);
+                                });
+                        }
+                        
                     }
                 );
         },
@@ -683,25 +726,9 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
             step_performed = !data.temperatures.is_empty();
         }
 
-
         let mut rect = ui.max_rect();
 
-        let mut amount = 0;
-        if data.show_plot.is_show(){
-            amount += 1;
-        }
-        if data.show_acceptance.is_show(){
-            amount += 1;
-        }
-        if data.show_histogram.is_show(){
-            amount += 1;
-        }
-        if data.show_history.is_show(){
-            amount += 1;
-        }
-        if data.show_exchange_rate.is_show(){
-            amount += 1;
-        }
+        let amount = data.count_shown_plots();
 
         let w = rect.width();
         rect.set_width(w/(amount as f32 + 0.1));
@@ -716,7 +743,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     ui.vertical(
                         |ui|
                         {
-                            ui.label("Plot");
+                            ui.label("Current heads rate");
                             show_plot(data, ui, is_dark_mode, smaller_rect);
                         }
                     );
@@ -753,28 +780,28 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                         |ui|
                         {
                             ui.label("Exchange Rate");
-                            show_exchange_rate(data, ui, smaller_rect);
+                            show_exchange_rate(data, ui, smaller_rect, is_dark_mode);
                         }
                     );
                 }
 
                 if data.show_history.is_show(){
                     egui::ScrollArea::vertical()
-                    .max_height(smaller_rect.height())
-                    .min_scrolled_height(smaller_rect.height())
-                    .show(
-                        ui, 
-                        |ui|
-                        {
-                            ui.vertical(
-                                |ui|
-                                {
-                                    ui.label("History");
-                                    show_history_plot(data, ui, is_dark_mode, smaller_rect);
-                                }
-                            );
-                        }
-                    );
+                        .max_height(smaller_rect.height())
+                        .min_scrolled_height(smaller_rect.height())
+                        .show(
+                            ui, 
+                            |ui|
+                            {
+                                ui.vertical(
+                                    |ui|
+                                    {
+                                        ui.label("History");
+                                        show_history_plot(data, ui, is_dark_mode, smaller_rect);
+                                    }
+                                );
+                            }
+                        );
                 }
             }
         );
@@ -874,7 +901,8 @@ fn show_acceptance_rate(
 fn show_exchange_rate(
     data: &ParallelTemperingData,
     ui: &mut egui::Ui,
-    rect: Rect
+    rect: Rect,
+    is_dark_mode: bool
 ){
     let mut plot_points = Vec::with_capacity(data.temperatures.len());
     for (id, temp_slice) in data.temperatures.windows(2).enumerate()
@@ -891,7 +919,10 @@ fn show_exchange_rate(
             }
         }
     }
-
+    let color = match is_dark_mode{
+        true => Color32::WHITE,
+        false => Color32::BLACK
+    };
     let all_points = plot_points
         .into_iter()
         .map(
@@ -900,6 +931,7 @@ fn show_exchange_rate(
                 let plot_points = PlotPoints::new(vec![plot_data]);
                 Points::new(plot_points)
                     .radius(10.0)
+                    .color(color)
             }
         );
 
@@ -1176,9 +1208,6 @@ fn temp_exchanges(
         let a = iter.next().unwrap();
         let b = iter.next().unwrap();
         let exchange_prob = exchange_acceptance_probability(a, b);
-        println!(
-            "{lower} {exchange_prob}"
-        );
         if exchange_prob >= rng.gen()
         {
             exchange_temperatures(a, b);
@@ -1269,6 +1298,22 @@ impl Show{
 
     pub fn is_show(&self) -> bool{
         matches!(self, Self::Yes)
+    }
+
+    pub fn to_num(self) -> u8
+    {
+        match self{
+            Self::Yes => 1,
+            Self::No => 0
+        }
+    }
+
+    pub fn toggle(&mut self)
+    {
+        match self{
+            Self::No => *self = Self::Yes,
+            Self::Yes => *self = Self::No
+        }
     }
 }
 
@@ -1364,3 +1409,39 @@ impl PairAcceptance{
         }
     }
 }
+
+const PAR_TEMP_HELP_MSG: &str = 
+"This program is intended to visualize parallel tempering.
+
+You can choose a temperature by either clicking on the number next to 'Temperature' once and then typing the desired number or \
+by clicking on said number and dragging it.\n
+You can also click on the 'Add Example Temperatures' button, which will add some pre-chosen example temperatures, if they do not exist already.
+
+You can adjust the number of coins in the coin flip sequence by dragging the corresponding number. Note: This will reset the statistics, as all configurations are 
+changed fundamentally.
+
+Once at least one temperature is added you can display the plots. Use the radio buttons to choose which plots to show.
+
+Heads rate: Displays current heads rate of the configurations\n
+Histogram: Displays the histograms of all temperatures\n
+Acceptance rate: Displays the measured acceptance rate of the markov steps\n
+Exchange rate: Displays the measured acceptance rate of configuration swaps between temperature pairs\n
+History: Displays the heads rate of the last 2000 steps if available
+
+The colors in the plots are representing the different configurations, i.e., if a proposed configuration change is accepted, the colors also change.
+
+Use the 'Reset statistics' button if you want to the histograms etc., for example because you want to restart the statistics measurement 
+after the equilibration time has passed.
+
+You can use the 'pause' button to enter single step mode, where you are able to perform markov steps manually via clicking a button.
+
+You can also adjust the temperatures in the plot to get a feeling for the effect. The temperatures are always clamped between the temperatures around it.
+This action does not reset the statistics, such that you can get a feel for what the changes in temperature do. Feel free to reset the statistics with the corresponding button.
+
+If you just want to delete specific temperatures: Click on the trash icon next to the temperature.\n
+You can also click on the 'Remove all Temperatures' button if you wish to try something completely different.
+
+To increase the size of the texts you can press 'ctrl' + '+'\n
+To decrease the size of the texts you can press 'ctrl' + '-'\n";
+
+const TASK: &str = "Try to change the temperatures such that all temperature pairs have a non-zero exchange rate.";
