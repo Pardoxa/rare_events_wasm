@@ -66,10 +66,13 @@ pub struct ParallelTemperingData
     show_acceptance: Show,
     show_history: Show,
     show_exchange_rate: Show,
+    show_estimate: Show,
     #[derivative(Default(value="Box::new(0..)"))]
     id_iter: Box<dyn Iterator<Item=u16>>,
     pair_acceptance: PairAcceptance,
-    help: Show
+    help: Show,
+    z: Vec<f64>,
+    show_z: Show
 }
 
 impl ParallelTemperingData{
@@ -138,6 +141,7 @@ impl ParallelTemperingData{
             + self.show_histogram.to_num()
             + self.show_history.to_num()
             + self.show_exchange_rate.to_num()
+            + self.show_estimate.to_num()
     }
 }
 
@@ -451,6 +455,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             data.show_acceptance.radio(ui, "Acceptance Rate");
                             data.show_exchange_rate.radio(ui, "Exchange Rate");
                             data.show_history.radio(ui, "History");
+                            data.show_estimate.radio(ui, "Resulting Estimate");
                             
                         } 
 
@@ -809,6 +814,10 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 );
                             }
                         );
+                }
+
+                if data.show_estimate.is_show(){
+                    ResultingEstimate::show(data, ui, is_dark_mode, smaller_rect, ctx);
                 }
             }
         );
@@ -1431,6 +1440,128 @@ impl PairAcceptance{
     }
 }
 
+pub struct ResultingEstimate{
+    pdfs: Vec<Vec<f64>>
+}
+
+impl ResultingEstimate{
+    pub fn calc(data: &ParallelTemperingData) -> Self
+    {
+        let pdfs: Vec<Vec<_>> = data.temperatures
+            .iter()
+            .map(
+                |temp|
+                {
+                    let hist = &temp.hist;
+                    let hits = hist.hist().as_slice();
+                    let count: usize = hits.iter().sum();
+                    let factor = (count as f64).recip();
+                    let len_factor = (hits.len() as f64).recip();
+                    let temperature_recip = temp.temperature.recip();
+                    hits.iter()
+                        .enumerate()
+                        .map(
+                            |(idx, hits)|
+                            {
+                                let prob = *hits as f64 * factor;
+                                let heads_rate = idx as f64 * len_factor;
+                                if prob == 0.0{
+                                    f64::NAN
+                                } else {
+                                    (prob).ln() + heads_rate * temperature_recip
+                                }
+                            }
+                        ).collect()
+                }
+            ).collect();
+        Self{pdfs}
+    }
+
+    fn show(
+        data: &mut ParallelTemperingData,
+        ui: &mut egui::Ui,
+        is_dark_mode: bool,
+        rect: Rect,
+        ctx: &egui::Context
+    )
+    {
+        let this = Self::calc(data);
+       
+        let txt = match data.show_z{
+             Show::No => "Show Z selection",
+             Show::Yes => "Hide Z selection"
+        };
+
+        // Make sure I have exactly enough z values
+        if data.z.len() != data.temperatures.len(){
+            data.z.truncate(data.temperatures.len());
+            let missing = data.temperatures.len() - data.z.len();
+            data.z.extend(std::iter::repeat_n(0.0, missing));
+        }
+
+        if data.show_z.is_show(){
+            Window::new("z_values")
+                .resizable(false)
+                .auto_sized()
+                .collapsible(false)
+                .show(ctx, |ui| {      
+                    for (z, temp) in data.z.iter_mut().zip(data.temperatures.iter()){
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.label(format!("T={}; z=", temp.temperature));
+                                ui.add(
+                                    DragValue::new(z)
+                                        .speed(0.1)
+                                );
+                            }
+                        );
+                    }
+                });
+        }
+        ui.vertical(
+            |ui|
+            {
+                if ui.button(txt).clicked(){
+                    data.show_z.toggle();
+                }
+
+                Plot::new("my_est_plot")
+                    .x_axis_label("Heads rate")
+                    .y_axis_label("Probability")
+                    .show_y(false)
+                    .width(rect.width())
+                    .height(rect.height())
+                    .legend(Legend::default())
+                    .show(
+                        ui, 
+                        |plot_ui|
+                        {
+                            for ((temp, pdf), z) in data.temperatures.iter()
+                                .zip(this.pdfs.iter())
+                                .zip(data.z.iter())
+                            {
+                                let len = pdf.len();
+                                let factor = (len as f64).recip();
+                                let line = Line::new(
+                                    pdf.iter()
+                                        .enumerate()
+                                        .map(
+                                            |(idx, prob)|
+                                            {
+                                                [idx as f64 * factor, *prob + *z]
+                                            }
+                                        ).collect::<Vec<_>>()
+                                    ).name(format!("T={}", temp.temperature))
+                                    .color(get_color(temp.color, is_dark_mode));
+                                plot_ui.line(line);
+                            }
+                        }
+                    );
+            }
+        );
+    }
+}
 
 
 const PAR_TEMP_HELP_MSG: &str = 
