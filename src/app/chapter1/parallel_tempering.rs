@@ -1,5 +1,5 @@
 use core::f64;
-use std::{collections::{BTreeMap, BTreeSet}, mem::swap, num::{NonZeroU32, NonZeroUsize}, u32};
+use std::{collections::{BTreeMap, BTreeSet}, mem::swap, num::{NonZeroU32, NonZeroUsize}};
 use num_traits::Signed;
 use sampling::{HistU32Fast, Histogram};
 use derivative::Derivative;
@@ -12,7 +12,7 @@ use ordered_float::NotNan;
 use crate::misc::*;
 
 
-const COLORS: [DarkLightColor; 8] = [
+const COLORS: [DarkLightColor; 11] = [
     DarkLightColor{dark: Color32::LIGHT_RED, light: Color32::RED},
     DarkLightColor{dark: Color32::LIGHT_BLUE, light: Color32::BLUE},
     DarkLightColor{dark: Color32::ORANGE, light: Color32::ORANGE},
@@ -20,12 +20,15 @@ const COLORS: [DarkLightColor; 8] = [
     DarkLightColor{dark: Color32::YELLOW, light: Color32::GOLD},
     DarkLightColor{dark: Color32::LIGHT_GREEN, light: Color32::GREEN},
     DarkLightColor{dark: Color32::LIGHT_YELLOW, light: Color32::KHAKI},
-    DarkLightColor{dark: Color32::from_rgb(255, 0, 255), light: Color32::from_rgb(255, 0, 255)}
+    DarkLightColor{dark: Color32::from_rgb(255, 0, 255), light: Color32::from_rgb(255, 0, 255)},
+    DarkLightColor{dark: Color32::from_rgb(183, 137, 190), light: Color32::from_rgb(139, 35, 157)},
+    DarkLightColor{dark: Color32::from_rgb(77, 208, 225), light: Color32::from_rgb(35, 87, 93)},
+    DarkLightColor{dark: Color32::from_rgb(244, 143, 177), light: Color32::from_rgb(220, 20, 60)}
 ];
 
 const DEFAULT_TEMPERATURES: [f64; 8] = [
     0.1,
-    0.01,
+    0.025,
     0.005,
     0.0075,
     -0.1,
@@ -276,9 +279,9 @@ impl Temperature{
         let mut new_heads = if old_val == *entry{
             old_heads
         } else if old_val {
-            old_heads + 1
-        } else {
             old_heads - 1
+        } else {
+            old_heads + 1
         };
 
         let acceptance_prob = ((old_heads - new_heads) as f64 / (self.temperature * len as f64)).exp();
@@ -290,6 +293,10 @@ impl Temperature{
         } else {
             self.acceptance.count_acceptance();
         }
+        debug_assert_eq!(
+            new_heads, 
+            self.number_of_heads()
+        );
         let new_heads = new_heads as u32;
         self.ring_buffer.push((self.color, new_heads));
         self.increment_hist(new_heads);
@@ -1115,7 +1122,6 @@ fn show_history_plot(
                 }
 
                 let mut plot = Plot::new(format!("{id}PastPLOT"))
-                    .clamp_grid(true)
                     .legend(Legend::default())
                     .allow_scroll(false)
                     .y_axis_label("Heads rate");
@@ -1278,7 +1284,7 @@ fn exchange_acceptance_probability(
     let ea = a.heads_rate();
     let eb = b.heads_rate();
     1.0_f64.min(
-        (-(1.0/a.temperature - 1.0/b.temperature) * (ea - eb))
+        ((1.0/a.temperature - 1.0/b.temperature) * (ea - eb))
             .exp()
     )
 }
