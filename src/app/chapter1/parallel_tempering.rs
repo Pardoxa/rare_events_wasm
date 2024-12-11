@@ -10,7 +10,7 @@ use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
 use ordered_float::NotNan;
 use crate::misc::*;
-
+use super::wang_landau::calc_true_log;
 
 const COLORS: [DarkLightColor; 11] = [
     DarkLightColor{dark: Color32::LIGHT_RED, light: Color32::RED},
@@ -72,7 +72,9 @@ pub struct ParallelTemperingData
     pair_acceptance: PairAcceptance,
     help: Show,
     z: Vec<f64>,
-    show_z: Show
+    show_z: Show,
+    #[derivative(Default(value="calc_true_log(NonZeroU32::new(100).unwrap())"))]
+    true_density: Vec<f64>
 }
 
 impl ParallelTemperingData{
@@ -132,6 +134,7 @@ impl ParallelTemperingData{
                 }
             );
         self.pair_acceptance.reset_counts();
+        self.true_density = calc_true_log(self.num_coins);
     }
 
     fn count_shown_plots(&self) -> u8
@@ -1447,7 +1450,7 @@ pub struct ResultingEstimate{
 impl ResultingEstimate{
     pub fn calc(data: &ParallelTemperingData) -> Self
     {
-        let pdfs: Vec<Vec<_>> = data.temperatures
+        let mut pdfs: Vec<Vec<_>> = data.temperatures
             .iter()
             .map(
                 |temp|
@@ -1474,7 +1477,62 @@ impl ResultingEstimate{
                         ).collect()
                 }
             ).collect();
+
+        pdfs.iter_mut()
+            .zip(data.z.iter())
+            .for_each(
+                |(slice, z)| 
+                {
+                    ln_to_log10(slice);
+                    slice.iter_mut()
+                        .for_each(|v| *v += z);
+                }
+            );
         Self{pdfs}
+    }
+
+    pub fn merged(&self, data: &ParallelTemperingData) -> Vec<f64>
+    {
+
+        let mut iter = data.temperatures
+            .iter()
+            .map(|t| t.hist.hist());
+        let cloned_iter = iter.clone();
+
+        let mut total_hits_hist = iter.next().unwrap().clone();
+
+        for hist in iter {
+            total_hits_hist.iter_mut()
+                .zip(hist)
+                .for_each(
+                    |(total, acc)|
+                    {
+                        *total += *acc;
+                    }
+                );
+        }
+
+        let mut prob = vec![f64::NAN; total_hits_hist.len()];
+
+        for (which, hist) in cloned_iter.enumerate() {
+            let pdf_slice = self.pdfs[which].as_slice();
+            for (idx, &hits) in hist.iter().enumerate()
+            {
+                if hits > 0 {
+                    let total_hits = total_hits_hist[idx];
+                    let prob = &mut prob[idx];
+                    let weight = hits as f64 / total_hits as f64;
+                    let to_add = pdf_slice[idx] * weight;
+                    if prob.is_nan(){
+                        *prob = to_add
+                    } else if !to_add.is_nan(){
+                        *prob += to_add
+                    };
+                }
+            }
+        }
+        sampling::norm_log10_sum_to_1(&mut prob);
+        prob
     }
 
     fn show(
@@ -1485,7 +1543,7 @@ impl ResultingEstimate{
         ctx: &egui::Context
     )
     {
-        let this = Self::calc(data);
+
        
         let txt = match data.show_z{
              Show::No => "Show Z selection",
@@ -1498,6 +1556,8 @@ impl ResultingEstimate{
             let missing = data.temperatures.len() - data.z.len();
             data.z.extend(std::iter::repeat_n(0.0, missing));
         }
+
+        let this = Self::calc(data);
 
         if data.show_z.is_show(){
             Window::new("z_values")
@@ -1526,20 +1586,23 @@ impl ResultingEstimate{
                     data.show_z.toggle();
                 }
 
+                let height = rect.height();
+                let mut halfed_rect = rect;
+                halfed_rect.set_height(height * 0.5);
+
                 Plot::new("my_est_plot")
                     .x_axis_label("Heads rate")
-                    .y_axis_label("Probability")
+                    .y_axis_label("Log10 of Probability")
                     .show_y(false)
-                    .width(rect.width())
-                    .height(rect.height())
+                    .width(halfed_rect.width())
+                    .height(halfed_rect.height())
                     .legend(Legend::default())
                     .show(
                         ui, 
                         |plot_ui|
                         {
-                            for ((temp, pdf), z) in data.temperatures.iter()
+                            for (temp, pdf) in data.temperatures.iter()
                                 .zip(this.pdfs.iter())
-                                .zip(data.z.iter())
                             {
                                 let len = pdf.len();
                                 let factor = (len as f64).recip();
@@ -1549,7 +1612,7 @@ impl ResultingEstimate{
                                         .map(
                                             |(idx, prob)|
                                             {
-                                                [idx as f64 * factor, *prob + *z]
+                                                [idx as f64 * factor, *prob]
                                             }
                                         ).collect::<Vec<_>>()
                                     ).name(format!("T={}", temp.temperature))
@@ -1558,6 +1621,47 @@ impl ResultingEstimate{
                             }
                         }
                     );
+
+                    let merged = this.merged(data);
+
+                    Plot::new("my_est_res_plot")
+                        .x_axis_label("Number of Heads")
+                        .y_axis_label("Log10 of Probability")
+                        .show_y(false)
+                        .width(halfed_rect.width())
+                        .height(halfed_rect.height())
+                        .legend(Legend::default())
+                        .show(
+                            ui, 
+                            |plot_ui|
+                            {
+                                let line: Line = Line::new(
+                                    merged.iter()
+                                        .enumerate()
+                                        .map(
+                                            |(idx, val)|
+                                            {
+                                                [idx as f64, *val]
+                                            }
+                                        ).collect::<Vec<_>>()
+                                    ).name("Merged");
+
+                                let line2 = Line::new(
+                                    data.true_density
+                                        .iter()
+                                        .enumerate()
+                                        .map(
+                                            |(idx, val)|
+                                            {
+                                                [idx as f64, *val]
+                                            }
+                                        ).collect::<Vec<_>>()
+                                    ).name("True Probability");
+                                
+                                plot_ui.line(line2);
+                                plot_ui.line(line);
+                            }
+                        );
             }
         );
     }

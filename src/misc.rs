@@ -88,3 +88,10 @@ pub fn colored_text(text: &str, color: Color32) -> RichText
     let txt: RichText = text.into();
     txt.color(color)
 }
+
+
+pub fn ln_to_log10(slice: &mut [f64])
+{
+    slice.iter_mut()
+            .for_each(|val| *val *= std::f64::consts::LOG10_E);
+}

@@ -239,7 +239,7 @@ pub fn wang_landau_gui(
     }
 }
 
-fn calc_true_log(
+pub fn calc_true_log(
     coin_sequence_length: NonZeroU32
 ) -> Vec<f64>
 {
