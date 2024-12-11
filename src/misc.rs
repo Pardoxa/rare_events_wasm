@@ -71,4 +71,10 @@ impl<T> RingBuffer<T>{
     {
         self.buffer.clear();
     }
+
+    #[inline]
+    pub fn len(&self) -> usize
+    {
+        self.buffer.len()
+    }
 }

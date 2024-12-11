@@ -1044,42 +1044,48 @@ fn show_history_plot(
         ui, 
         |ui|
         {
-            for (id, temp) in data.temperatures.iter().rev().enumerate(){
+            for (id, temp) in data.temperatures.iter().enumerate().rev(){
         
 
                 let mut lines: Vec<Line> = Vec::new();
+                let start = -(temp.ring_buffer.len() as i16);
                 let mut iter = temp.ring_buffer
                     .iter()
-                    .enumerate()
+                    .zip(start..)
                     .peekable();
 
                 'a: while let Some(mut entry) = iter.next(){
                     let mut this_vec = Vec::new();
-                    this_vec.push([entry.0 as f64, entry.1.1 as f64]);
+                    this_vec.push([entry.1 as f64, entry.0.1 as f64]);
                     while let Some(peeked) = iter.peek(){
-                        if entry.1.0 != peeked.1.0 {
+                        if entry.0.0 != peeked.0.0 {
                             lines.push(
                                 Line::new(this_vec)
-                                    .color(get_color(entry.1.0, is_dark_mode))  
+                                    .color(get_color(entry.0.0, is_dark_mode))  
                             );
                             continue 'a;
                         } else{
                             entry = iter.next().unwrap();
-                            this_vec.push([entry.0 as f64, entry.1.1 as f64]);
+                            this_vec.push([entry.1 as f64, entry.0.1 as f64]);
                         }
                     } 
                     lines.push(
                         Line::new(this_vec)
-                            .color(get_color(entry.1.0, is_dark_mode))  
+                            .color(get_color(entry.0.0, is_dark_mode))  
                     );
 
                 }
 
-                Plot::new(format!("{id}PastPLOT"))
+                let mut plot = Plot::new(format!("{id}PastPLOT"))
                     .clamp_grid(true)
                     .legend(Legend::default())
-                    .allow_scroll(false)
-                    .show(
+                    .allow_scroll(false);
+
+                if id == 0 {
+                    plot = plot.x_axis_label("time");
+                }
+
+                plot.show(
                         ui, 
                         |plot_ui|
                         {
@@ -1111,7 +1117,7 @@ fn show_hist(
         ui, 
         |ui|
         {
-            for (id, temp) in data.temperatures.iter().rev().enumerate(){
+            for (id, temp) in data.temperatures.iter().enumerate().rev(){
         
                 let chart = BarChart::new(
                     temp.hist
@@ -1128,11 +1134,16 @@ fn show_hist(
                 ).color(get_color(temp.color, is_dark_mode))
                 .name(format!("T={}", temp.temperature));
 
-                Plot::new(format!("{id}HISTPLOT"))
+                let mut plot = Plot::new(format!("{id}HISTPLOT"))
                     .clamp_grid(true)
                     .legend(Legend::default())
-                    .allow_scroll(false)
-                    .show(
+                    .allow_scroll(false);
+
+                if id == 0 {
+                    plot = plot.x_axis_label("Number of Heads");
+                }
+
+                plot.show(
                         ui, 
                         |plot_ui|
                         {
