@@ -1136,7 +1136,7 @@ fn show_history_plot(
                 let mut plot = Plot::new(format!("{id}PastPLOT"))
                     .legend(Legend::default())
                     .allow_scroll(false)
-                    .y_axis_label("Heads rate");
+                    .y_axis_label("#Heads");
 
                 if id == 0 {
                     plot = plot.x_axis_label("time");
