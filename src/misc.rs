@@ -57,7 +57,7 @@ impl<T> RingBuffer<T>{
         Self { buffer: VecDeque::with_capacity(length.get()), max_len: length }
     }
 
-    /// Failes silently if Ring Buffer is empty
+    /// Fails silently if Ring Buffer is empty
     pub fn repeat_last(&mut self)
     where T: Clone
     {
@@ -72,6 +72,7 @@ impl<T> RingBuffer<T>{
         self.buffer.clear();
     }
 
+    #[allow(clippy::len_without_is_empty)]
     #[inline]
     pub fn len(&self) -> usize
     {

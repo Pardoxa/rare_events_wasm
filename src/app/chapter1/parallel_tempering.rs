@@ -458,19 +458,18 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
 
                         if !data.temperatures.is_empty(){
 
-                            if ui.add(Button::new("Reset Histograms")).clicked()
+                            if ui.add(Button::new("Reset Statistics")).clicked()
                             {
                                 data.temperatures.iter_mut()
                                     .for_each(
-                                        |t| t.hist.reset()
+                                        |t| 
+                                        {
+                                            t.hist.reset();
+                                            t.acceptance.reset();
+                                            t.ring_buffer.reset();
+                                        }
                                     );
-                            }
-                            if ui.add(Button::new("Reset Acceptance")).clicked()
-                            {
-                                data.temperatures.iter_mut()
-                                    .for_each(
-                                        |t| t.acceptance.reset()
-                                    );
+                                data.pair_acceptance.reset_counts();
                             }
 
                             let txt = if data.paused{
@@ -1355,5 +1354,13 @@ impl PairAcceptance{
             (id2, id1)
         };
         self.map.get(&(a,b))
+    }
+
+    pub fn reset_counts(&mut self)
+    {
+        for v in self.map.values_mut()
+        {
+            v.reset();
+        }
     }
 }
