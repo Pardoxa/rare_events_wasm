@@ -79,3 +79,12 @@ impl<T> RingBuffer<T>{
         self.buffer.len()
     }
 }
+
+pub const HINT: &str = "To increase the size of the texts you can press 'ctrl' + '+'
+To decrease the size of the texts you can press 'ctrl' + '-'\n";
+
+pub fn colored_text(text: &str, color: Color32) -> RichText
+{
+    let txt: RichText = text.into();
+    txt.color(color)
+}

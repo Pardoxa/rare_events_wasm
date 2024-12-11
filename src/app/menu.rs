@@ -1,7 +1,6 @@
-use crate::misc::DarkLightColor;
-
+use crate::misc::*;
 use super::chapter_markers::*;
-use egui::{Color32, Label, RichText, Sense, Window};
+use egui::{Color32, Label, Sense, Window};
 use strum::IntoEnumIterator;
 
 pub trait MenuAction{
@@ -218,13 +217,11 @@ pub fn default_menu(
                 .show(ctx, |ui| {
 
                     let is_dark_mode = ctx.style().visuals.dark_mode;
-                    let txt1: RichText = "To increase the font size use 'ctrl' + '+'".into();
-                    let txt1 = txt1.color(Color32::RED);
-                    ui.label(txt1);
-                    let txt2: RichText = "To decrease the font size use 'ctrl' + '-'".into();
-                    let color2 = DarkLightColor{light: Color32::BLUE, dark: Color32::LIGHT_BLUE};
-                    let txt2 = txt2.color(color2.get_color(is_dark_mode));
-                    ui.label(txt2);
+                    let color = match is_dark_mode {
+                        true => Color32::RED,
+                        false => Color32::BLUE
+                    };
+                    ui.label(colored_text(HINT, color));
                 });
         });
     });

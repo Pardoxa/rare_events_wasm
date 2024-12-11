@@ -685,14 +685,14 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 Color32::RED
                             };
                             Window::new("Help")
-                                .resizable(true)
+                                .resizable(false)
                                 .auto_sized()
+                                .collapsible(false)
                                 .show(ctx, |ui| {      
-                                    toggle_btn(ui, &mut data.help);                        
+                                    toggle_btn(ui, &mut data.help);         
+                                    ui.label(colored_text(HINT, color));               
                                     ui.label(PAR_TEMP_HELP_MSG);
-                                    let task: RichText = TASK.into();
-                                    let task = task.color(color);
-                                    ui.label(task);
+                                    ui.label(colored_text(TASK, color));
                                 });
                         }
                         
@@ -1410,22 +1410,24 @@ impl PairAcceptance{
     }
 }
 
+
+
 const PAR_TEMP_HELP_MSG: &str = 
 "This program is intended to visualize parallel tempering.
 
 You can choose a temperature by either clicking on the number next to 'Temperature' once and then typing the desired number or \
-by clicking on said number and dragging it.\n
+by clicking on said number and dragging it.
 You can also click on the 'Add Example Temperatures' button, which will add some pre-chosen example temperatures, if they do not exist already.
 
-You can adjust the number of coins in the coin flip sequence by dragging the corresponding number. Note: This will reset the statistics, as all configurations are 
+You can adjust the number of coins in the coin flip sequence by dragging the corresponding number. Note: This will reset the statistics, as all configurations are\
 changed fundamentally.
 
 Once at least one temperature is added you can display the plots. Use the radio buttons to choose which plots to show.
 
-Heads rate: Displays current heads rate of the configurations\n
-Histogram: Displays the histograms of all temperatures\n
-Acceptance rate: Displays the measured acceptance rate of the markov steps\n
-Exchange rate: Displays the measured acceptance rate of configuration swaps between temperature pairs\n
+Heads rate: Displays current heads rate of the configurations
+Histogram: Displays the histograms of all temperatures
+Acceptance rate: Displays the measured acceptance rate of the markov steps
+Exchange rate: Displays the measured acceptance rate of configuration swaps between temperature pairs
 History: Displays the heads rate of the last 2000 steps if available
 
 The colors in the plots are representing the different configurations, i.e., if a proposed configuration change is accepted, the colors also change.
@@ -1438,10 +1440,9 @@ You can use the 'pause' button to enter single step mode, where you are able to 
 You can also adjust the temperatures in the plot to get a feeling for the effect. The temperatures are always clamped between the temperatures around it.
 This action does not reset the statistics, such that you can get a feel for what the changes in temperature do. Feel free to reset the statistics with the corresponding button.
 
-If you just want to delete specific temperatures: Click on the trash icon next to the temperature.\n
+If you just want to delete specific temperatures: Click on the trash icon next to the temperature.
 You can also click on the 'Remove all Temperatures' button if you wish to try something completely different.
+";
 
-To increase the size of the texts you can press 'ctrl' + '+'\n
-To decrease the size of the texts you can press 'ctrl' + '-'\n";
-
-const TASK: &str = "Try to change the temperatures such that all temperature pairs have a non-zero exchange rate.";
+const TASK: &str = "Try to change the temperatures such that all temperature pairs have a non-zero exchange rate.
+Note: Reset the statistics from time to time to make sure that the non-zero exchange rates represent your current temperatures.";
