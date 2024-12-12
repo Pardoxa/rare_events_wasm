@@ -37,7 +37,7 @@ const DEFAULT_TEMPERATURES: [f64; 8] = [
     -0.005
 ];
 
-const MONOSPACE_LEN: usize = 15;
+const MONOSPACE_LEN: usize = 18;
 
 const DRAG_SPEED: f64 = 0.01;
 
@@ -405,6 +405,22 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             .clicked() {
                             data.side_panel = SidePanelView::Hidden;
                         }
+
+                        let help_txt = match data.help{
+                            Show::Yes => "Close Help",
+                            Show::No => "Show Help"
+                        };
+
+                        let toggle_btn = |ui: &mut egui::Ui, help: &mut Show|
+                        {
+                            if ui.button(help_txt).clicked()
+                            {
+                                help.toggle();
+                            }
+                        };
+
+                        toggle_btn(ui, &mut data.help);
+
                         ui.horizontal(
                             |ui|
                             {
@@ -678,20 +694,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             data.remove(to_remove);
                         }
 
-                        let txt = match data.help{
-                            Show::Yes => "Close Help",
-                            Show::No => "Show Help"
-                        };
 
-                        let toggle_btn = |ui: &mut egui::Ui, help: &mut Show|
-                        {
-                            if ui.button(txt).clicked()
-                            {
-                                help.toggle();
-                            }
-                        };
-
-                        toggle_btn(ui, &mut data.help);
 
                         if data.help.is_show(){
                             let color = if is_dark_mode{
@@ -1322,7 +1325,7 @@ impl Show{
         ui.horizontal(
             |ui|
             {
-                label(ui, name, MONOSPACE_LEN);
+                label(ui, name, MONOSPACE_LEN, None);
                 ui.radio_value(self, Self::Yes, "Y");
                 ui.radio_value(self, Self::No, "N");
             }
@@ -1350,12 +1353,21 @@ impl Show{
     }
 }
 
-fn label(ui: &mut egui::Ui, name: &str, len: usize)
+fn label<S>(
+    ui: &mut egui::Ui, 
+    name: S, 
+    len: usize,
+    suffix: Option<&str>
+)
+    where S: Into<String>
 {
-    let mut this_str = name.to_owned();
+    let mut this_str = name.into();
     this_str.truncate(len);
     while this_str.len() < len {
         this_str.push(' ');
+    }
+    if let Some(s) = suffix{
+        this_str.push_str(s);
     }
     let rich: RichText = this_str.into();
     let rich = rich.monospace();
@@ -1543,7 +1555,9 @@ impl ResultingEstimate{
         ctx: &egui::Context
     )
     {
-
+        if data.temperatures.is_empty(){
+            return;
+        }
        
         let txt = match data.show_z{
              Show::No => "Show Z selection",
@@ -1564,12 +1578,32 @@ impl ResultingEstimate{
                 .resizable(false)
                 .auto_sized()
                 .collapsible(false)
-                .show(ctx, |ui| {      
-                    for (z, temp) in data.z.iter_mut().zip(data.temperatures.iter()){
+                .show(ctx, |ui| {   
+                    if ui.button(txt).clicked(){
+                        data.show_z.toggle();
+                    }
+                    let hint = colored_text(
+                        "Adjust the z values to make the curves overlap!", 
+                        COLORS[1].get_color(is_dark_mode)    
+                    );
+                    ui.label(hint);
+
+                    let mut max_len = 0;
+                    let labels: Vec<_> = data.temperatures
+                        .iter()
+                        .map(
+                            |temp| 
+                            {
+                                let label = format!("T={}; ", temp.temperature);
+                                max_len = label.len().max(max_len);
+                                label
+                            }
+                        ).collect();
+                    for (z, this_label) in data.z.iter_mut().zip(labels){
                         ui.horizontal(
                             |ui|
-                            {
-                                ui.label(format!("T={}; z=", temp.temperature));
+                            {   
+                                label(ui, this_label, max_len, Some("z="));
                                 ui.add(
                                     DragValue::new(z)
                                         .speed(0.1)
