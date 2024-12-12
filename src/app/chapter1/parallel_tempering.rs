@@ -18,7 +18,7 @@ const COLORS: [DarkLightColor; 11] = [
     DarkLightColor{dark: Color32::ORANGE, light: Color32::ORANGE},
     DarkLightColor{dark: Color32::WHITE, light: Color32::BLACK},
     DarkLightColor{dark: Color32::YELLOW, light: Color32::GOLD},
-    DarkLightColor{dark: Color32::LIGHT_GREEN, light: Color32::GREEN},
+    DarkLightColor{dark: Color32::LIGHT_GREEN, light: Color32::DARK_GREEN},
     DarkLightColor{dark: Color32::LIGHT_YELLOW, light: Color32::KHAKI},
     DarkLightColor{dark: Color32::from_rgb(255, 0, 255), light: Color32::from_rgb(255, 0, 255)},
     DarkLightColor{dark: Color32::from_rgb(183, 137, 190), light: Color32::from_rgb(139, 35, 157)},
@@ -491,7 +491,15 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                             data.show_exchange_rate.radio(ui, "Exchange Rate");
                             data.show_history.radio(ui, "History");
                             data.show_estimate.radio(ui, "Resulting Estimate");
-                            
+                            if data.show_estimate.is_show(){
+                                let txt = match data.show_z{
+                                    Show::No => "Show Z selection",
+                                    Show::Yes => "Hide Z selection"
+                                };
+                                if ui.button(txt).highlight().clicked(){
+                                    data.show_z.toggle();
+                                }
+                            }
                         } 
 
                         if ui.add(Button::new("Add Example Temperatures"))
@@ -840,7 +848,13 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                 }
 
                 if data.show_estimate.is_show(){
-                    ResultingEstimate::show(data, ui, is_dark_mode, smaller_rect, ctx);
+                    ui.vertical(
+                        |ui|
+                        {
+                            ui.label("Resulting Estimate");
+                            ResultingEstimate::show(data, ui, is_dark_mode, smaller_rect, ctx);
+                        }
+                    );
                 }
             }
         );
@@ -1589,11 +1603,7 @@ impl ResultingEstimate{
         if data.temperatures.is_empty(){
             return;
         }
-       
-        let txt = match data.show_z{
-             Show::No => "Show Z selection",
-             Show::Yes => "Hide Z selection"
-        };
+
 
         // Make sure I have exactly enough z values
         if data.z.len() != data.temperatures.len(){
@@ -1605,12 +1615,12 @@ impl ResultingEstimate{
         let this = Self::calc(data);
 
         if data.show_z.is_show(){
-            Window::new("z_values")
+            Window::new("z selection")
                 .resizable(false)
                 .auto_sized()
                 .collapsible(false)
                 .show(ctx, |ui| {   
-                    if ui.button(txt).clicked(){
+                    if ui.button("Close z-selection Window").clicked(){
                         data.show_z.toggle();
                     }
                     data.z_legend.radio(ui, "z legend");
@@ -1618,6 +1628,11 @@ impl ResultingEstimate{
                     let hint = colored_text(
                         "Adjust the z values to make the curves overlap!", 
                         get_color(1, is_dark_mode)
+                    );
+                    ui.label(hint);
+                    let hint = colored_text(
+                        "Drag the values to quickly adjust them", 
+                        get_color(5, is_dark_mode)
                     );
                     ui.label(hint);
 
@@ -1649,9 +1664,6 @@ impl ResultingEstimate{
         ui.vertical(
             |ui|
             {
-                if ui.button(txt).clicked(){
-                    data.show_z.toggle();
-                }
 
                 let height = rect.height();
                 let mut halfed_rect = rect;
