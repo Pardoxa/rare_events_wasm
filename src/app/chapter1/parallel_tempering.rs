@@ -1,7 +1,7 @@
 use core::f64;
-use std::{collections::{BTreeMap, BTreeSet}, mem::swap, num::{NonZeroU32, NonZeroUsize}};
+use std::{collections::{BTreeMap, BTreeSet}, mem::swap, num::{NonZeroI32, NonZeroU32, NonZeroUsize}};
 use num_traits::Signed;
-use sampling::{HistU32Fast, Histogram};
+use sampling::{HistI32Fast, Histogram};
 use derivative::Derivative;
 use egui::{Button, Color32, DragValue, Grid, Label, Rect, RichText, Slider, Widget, Window};
 use egui_plot::{AxisHints, Bar, BarChart, Legend, Line, MarkerShape, Plot, PlotBounds, PlotPoint, PlotPoints, Points, Text};
@@ -81,10 +81,11 @@ impl ParallelTemperingData{
     fn add_temperature(&mut self, to_add: f64) -> bool
     {
         if !self.contains_temp(to_add){
+            let num_coins = NonZeroI32::new(self.num_coins.get() as i32).unwrap();
             self.temperatures.push(
                 Temperature::new(
                     to_add,
-                    self.num_coins,
+                    num_coins,
                     &mut self.rng,
                     self.marker_cycle.as_mut()
                         .unwrap()
@@ -130,7 +131,8 @@ impl ParallelTemperingData{
             .for_each(
                 |temp|
                 {
-                    temp.adjust_length(self.num_coins, &mut self.rng);
+                    let len = NonZeroI32::new(self.num_coins.get() as i32).unwrap();
+                    temp.adjust_length(len, &mut self.rng);
                 }
             );
         self.pair_acceptance.reset_counts();
@@ -244,17 +246,18 @@ pub struct Temperature{
     config: Vec<bool>,
     marker: MarkerShape,
     color: u8,
-    hist: HistU32Fast,
+    hist: HistI32Fast,
     acceptance: AcceptanceCounter,
-    ring_buffer: RingBuffer<(u8, u32)>,
+    ring_buffer: RingBuffer<(u8, i32)>,
     // does not change with config changes!
-    temperature_id: u16
+    temperature_id: u16,
+    num_heads: Option<u32>
 }
 
 impl Temperature{
     pub fn adjust_length(
         &mut self, 
-        length: NonZeroU32,
+        length: NonZeroI32,
         rng: &mut Pcg64
     )
     {
@@ -270,10 +273,11 @@ impl Temperature{
                     .map(|v| v <= 0.5)
             );
         }
-        self.hist = HistU32Fast::new_inclusive(0, length.get())
+        self.hist = HistI32Fast::new_inclusive(0, length.get())
             .unwrap();
         self.acceptance.reset();
         self.ring_buffer.reset();
+        self.num_heads = None;
     }
 
     pub fn markov_step(&mut self, rng: &mut Pcg64)
@@ -304,19 +308,18 @@ impl Temperature{
             new_heads, 
             self.number_of_heads()
         );
-        let new_heads = new_heads as u32;
         self.ring_buffer.push((self.color, new_heads));
         self.increment_hist(new_heads);
     }
 
-    pub fn increment_hist(&mut self, val: u32)
+    pub fn increment_hist(&mut self, val: i32)
     {
         self.hist.increment_quiet(val);
     }
 
     pub fn new(
         temp: f64, 
-        length: NonZeroU32, 
+        length: NonZeroI32, 
         rng: &mut Pcg64,
         marker: MarkerShape,
         color: u8,
@@ -330,20 +333,21 @@ impl Temperature{
             temperature: temp,
             config,
             marker,
-            hist: HistU32Fast::new_inclusive(0, length.get()).unwrap(),
+            hist: HistI32Fast::new_inclusive(0, length.get()).unwrap(),
             color,
             acceptance: AcceptanceCounter::default(),
             ring_buffer: RingBuffer::new(NonZeroUsize::new(2000).unwrap()),
-            temperature_id: id
+            temperature_id: id,
+            num_heads: None
         }
     }
 
-    pub fn number_of_heads(&self) -> isize
+    pub fn number_of_heads(&self) -> i32
     {
         self.config
             .iter()
             .filter(|&s| *s)
-            .count() as isize
+            .count() as i32
     }
 
     pub fn heads_rate(&self) -> f64
@@ -1111,7 +1115,7 @@ fn show_history_plot(
                     .peekable();
 
                 let mut maximum = 0;
-                let mut minimum = u32::MAX;
+                let mut minimum = i32::MAX;
 
                 'a: while let Some(mut entry) = iter.next(){
                     let mut this_vec = Vec::new();
@@ -1276,9 +1280,13 @@ fn exchange_temperatures(
         &mut a.color, 
         &mut b.color
     );
+    swap(
+        &mut a.num_heads, 
+        &mut b.num_heads
+    );
 
-    let ea = a.number_of_heads() as u32;
-    let eb = b.number_of_heads() as u32;
+    let ea = a.number_of_heads();
+    let eb = b.number_of_heads();
 
     a.hist.increment_quiet(ea);
     a.ring_buffer.push((a.color, ea));
