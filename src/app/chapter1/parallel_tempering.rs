@@ -251,7 +251,7 @@ pub struct Temperature{
     ring_buffer: RingBuffer<(u8, i32)>,
     // does not change with config changes!
     temperature_id: u16,
-    num_heads: Option<u32>
+    num_heads: Option<i32>
 }
 
 impl Temperature{
@@ -304,6 +304,7 @@ impl Temperature{
         } else {
             self.acceptance.count_acceptance();
         }
+        self.num_heads = Some(new_heads);
         debug_assert_eq!(
             new_heads, 
             self.number_of_heads()
@@ -344,10 +345,17 @@ impl Temperature{
 
     pub fn number_of_heads(&self) -> i32
     {
-        self.config
-            .iter()
-            .filter(|&s| *s)
-            .count() as i32
+        match self.num_heads{
+            Some(heads) => {
+                heads
+            },
+            None => {
+                self.config
+                    .iter()
+                    .filter(|&s| *s)
+                    .count() as i32
+            }
+        }
     }
 
     pub fn heads_rate(&self) -> f64
@@ -1711,7 +1719,7 @@ impl ResultingEstimate{
                                                 [idx as f64, *val]
                                             }
                                         ).collect::<Vec<_>>()
-                                    ).name("True Probability");
+                                    ).name("Analytic Probability");
                                 
                                 plot_ui.line(line2);
                                 plot_ui.line(line);
