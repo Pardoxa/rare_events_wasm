@@ -428,29 +428,31 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 ui.add(egui::DragValue::new(&mut data.temperature_to_add)
                                         .speed(DRAG_SPEED)
                                     ).on_hover_text("Click to type a number. Or drag the value for quick changes.");
+
+                                let add_btn = ui.add(Button::new("add"));
+                                if data.temperature_to_add == 0.0 {
+                                    add_btn.show_tooltip_text("We divide by the temperature in the formula for the acceptance probability. Thus 0 is an invalid temperature.");
+                                }else {
+                                    let add_btn = add_btn.on_hover_text("Click here to add the chosen temperature to the list of temperatures. You can't add a temperature twice");
+                                    if add_btn
+                                        .clicked()
+                                    {
+                                        let to_add = data.temperature_to_add;
+                                        let added = data.add_temperature(to_add);
+                                        if added{
+                                            data.sort_temps();
+                                            loop{
+                                                data.temperature_to_add /= 2.0;
+                                                if !data.contains_temp(data.temperature_to_add){
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    
+                                    }
+                                } 
                             }
                         );
-
-                        let add_btn = ui.add(Button::new("add temperature"));
-                        if data.temperature_to_add == 0.0 {
-                            add_btn.show_tooltip_text("We divide by the temperature in the formula for the acceptance probability. Thus 0 is an invalid temperature.");
-                        }
-                        else if add_btn
-                            .clicked()
-                        {
-                            let to_add = data.temperature_to_add;
-                            let added = data.add_temperature(to_add);
-                            if added{
-                                data.sort_temps();
-                                loop{
-                                    data.temperature_to_add /= 2.0;
-                                    if !data.contains_temp(data.temperature_to_add){
-                                        break;
-                                    }
-                                }
-                            }
-
-                        }
 
                         ui.horizontal(
                             |ui|
@@ -459,7 +461,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                                 let old_num = data.num_coins;
                                 ui.add(
                                     egui::DragValue::new(&mut data.num_coins)
-                                ).on_hover_text("Use this to change the size of the system, i.e., the number of coins. Will reset histograms etc. since the configurations are changed.");
+                                ).on_hover_text("Use this to change the size of all configurations, i.e., the number of coins. Will reset histograms etc. since all configurations are changed.");
                                 if old_num != data.num_coins && !data.temperatures.is_empty(){
                                     data.new_length();
                                 }
@@ -797,7 +799,8 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
                     ui.vertical(
                         |ui|
                         {
-                            ui.label("Exchange Rate");
+                            let exchange_name = format!("Exchange Rate: (tried exchanges = {})", data.pair_acceptance.counter);
+                            ui.label(exchange_name);
                             show_exchange_rate(data, ui, smaller_rect, is_dark_mode);
                         }
                     );
@@ -835,7 +838,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
     
         if step_performed{
             data.step_counter += 1;
-            if data.step_counter == data.num_coins.get(){
+            if data.step_counter >= data.num_coins.get(){
                 // try exchanges
                 data.step_counter = 0;
                 temp_exchanges(
@@ -1254,6 +1257,7 @@ fn temp_exchanges(
             pair_acceptance.count_rejected(a.temperature_id, b.temperature_id);
         }
     }
+    pair_acceptance.count_exchange_try();
 }
 
 fn exchange_temperatures(
@@ -1320,7 +1324,8 @@ pub enum Show{
 }
 
 impl Show{
-    pub fn radio(&mut self, ui: &mut egui::Ui, name: &str)
+    pub fn radio<S>(&mut self, ui: &mut egui::Ui, name: S)
+    where S: Into<String>
     {
         ui.horizontal(
             |ui|
@@ -1374,14 +1379,16 @@ fn label<S>(
     ui.label(rich);
 }
 
-fn get_color(idx: u8, is_dark_mode: bool) -> Color32
+#[inline]
+const fn get_color(idx: u8, is_dark_mode: bool) -> Color32
 {
     COLORS[idx as usize].get_color(is_dark_mode)
 }
 
 #[derive(Default)]
 pub struct PairAcceptance{
-    map: BTreeMap<(u16, u16), AcceptanceCounter>
+    map: BTreeMap<(u16, u16), AcceptanceCounter>,
+    counter: usize
 }
 
 impl PairAcceptance{
@@ -1452,6 +1459,12 @@ impl PairAcceptance{
         {
             v.reset();
         }
+        self.counter = 0;
+    }
+
+    pub fn count_exchange_try(&mut self)
+    {
+        self.counter += 1;
     }
 }
 
@@ -1584,7 +1597,7 @@ impl ResultingEstimate{
                     }
                     let hint = colored_text(
                         "Adjust the z values to make the curves overlap!", 
-                        COLORS[1].get_color(is_dark_mode)    
+                        get_color(1, is_dark_mode)
                     );
                     ui.label(hint);
 
@@ -1722,7 +1735,7 @@ History: Displays the heads rate of the last 2000 steps if available
 
 The colors in the plots are representing the different configurations, i.e., if a proposed configuration change is accepted, the colors also change.
 
-Use the 'Reset statistics' button if you want to the histograms etc., for example because you want to restart the statistics measurement 
+Use the 'Reset statistics' button if you want to reset the histograms etc., for example because you want to restart the statistics measurement 
 after the equilibration time has passed.
 
 You can use the 'pause' button to enter single step mode, where you are able to perform markov steps manually via clicking a button.
