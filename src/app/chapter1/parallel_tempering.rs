@@ -67,6 +67,8 @@ pub struct ParallelTemperingData
     show_history: Show,
     show_exchange_rate: Show,
     show_estimate: Show,
+    #[derivative(Default(value="Show::Yes"))]
+    z_legend: Show,
     #[derivative(Default(value="Box::new(0..)"))]
     id_iter: Box<dyn Iterator<Item=u16>>,
     pair_acceptance: PairAcceptance,
@@ -1611,6 +1613,8 @@ impl ResultingEstimate{
                     if ui.button(txt).clicked(){
                         data.show_z.toggle();
                     }
+                    data.z_legend.radio(ui, "z legend");
+                    
                     let hint = colored_text(
                         "Adjust the z values to make the curves overlap!", 
                         get_color(1, is_dark_mode)
@@ -1653,14 +1657,17 @@ impl ResultingEstimate{
                 let mut halfed_rect = rect;
                 halfed_rect.set_height(height * 0.5);
 
-                Plot::new("my_est_plot")
+                let mut plot = Plot::new("my_est_plot")
                     .x_axis_label("Heads rate")
                     .y_axis_label("Log10 of Probability")
                     .show_y(false)
                     .width(halfed_rect.width())
-                    .height(halfed_rect.height())
-                    .legend(Legend::default())
-                    .show(
+                    .height(halfed_rect.height());
+                if data.z_legend.is_show(){
+                    plot = plot.legend(Legend::default());
+                }
+                
+                plot.show(
                         ui, 
                         |plot_ui|
                         {
