@@ -1615,7 +1615,7 @@ impl ResultingEstimate{
         let this = Self::calc(data);
 
         if data.show_z.is_show(){
-            Window::new("z selection")
+            Window::new("z-selection")
                 .resizable(false)
                 .auto_sized()
                 .collapsible(false)

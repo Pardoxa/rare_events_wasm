@@ -22,7 +22,7 @@ type ThisWl = WangLandau1T<sampling::HistogramFast<u32>, rand_pcg::Lcg128Xsl64, 
 pub struct WangLandauConfig
 {
     /// How many coins to consider
-    #[derivative(Default(value="NonZeroU32::new(100).unwrap()"))]
+    #[derivative(Default(value="NonZeroU32::new(500).unwrap()"))]
     coin_sequence_length: NonZeroU32,
     /// Seed for random number generator
     seed: u64,
@@ -31,9 +31,10 @@ pub struct WangLandauConfig
     /// Visibility of the side Panel
     side_panel: SidePanelView,
     #[derivative(Default(value="0.0004"))]
-    threshold: f64,
+    target_log_f: f64,
     /// Log or Linear?
     display: DisplayState,
+    #[derivative(Default(value="LineOrPoints::Line"))]
     analytic: LineOrPoints,
     wang_landau: LineOrPoints,
     simple_sample: LineOrPoints
@@ -73,19 +74,25 @@ pub fn wang_landau_gui(
                         ui.radio_value(&mut data.display, DisplayState::Linear, "Linear");
                         ui.radio_value(&mut data.display, DisplayState::Log, "Logarithmic");
 
+                        ui.horizontal(
+                            |ui|
+                            {
+                                let old = data.coin_sequence_length;
+                                ui.label("Number of coins");
+                                ui.add(
+                                    DragValue::new(&mut data.coin_sequence_length)
+                                        .range(1..=10000)
+                                );
+                                if old != data.coin_sequence_length && data.simulation.is_some(){
+                                    let sim = Simulation::new(data);
+                                    data.simulation = Some(sim);
+                                }
+                            }
+                        );
+
                         match data.simulation.as_ref(){
                             None => {
-                                ui.horizontal(
-                                    |ui|
-                                    {
-                                        
-                                        ui.label("Number of coins");
-                                        ui.add(
-                                            DragValue::new(&mut data.coin_sequence_length)
-                                                .range(1..=10000)
-                                        );
-                                    }
-                                );
+
 
                                 if ui.add(
                                     Button::new("Create Simulation")
@@ -118,18 +125,18 @@ pub fn wang_landau_gui(
                         ui.horizontal(
                             |ui|
                             {
-                                ui.label("Target threshold");
-                                let old_threshold = data.threshold;
+                                ui.label("target log f");
+                                let old_target = data.target_log_f;
                                 ui.add(
                                     egui::Slider::new(
-                                        &mut data.threshold, 
+                                        &mut data.target_log_f, 
                                         0.000000000001..=0.001
                                     ).logarithmic(true)
                                 );
-                                if old_threshold != data.threshold 
+                                if old_target != data.target_log_f 
                                 {   
                                     if let Some(sim) = data.simulation.as_mut(){
-                                        sim.wl.set_log_f_threshold(data.threshold).unwrap();
+                                        sim.wl.set_log_f_threshold(data.target_log_f).unwrap();
                                     }
                                 }
                                 
@@ -277,7 +284,7 @@ impl Simulation{
             .unwrap();
 
         let mut wl = WangLandau1T::new(
-            data.threshold, 
+            data.target_log_f, 
             ensemble, 
             wl_rng, 
             1, 
@@ -315,22 +322,20 @@ impl Simulation{
             }, 
             |_| {(time.elapsed().as_millis() as f32) < 5.0_f32}
         );
-
-        let hist = self.simple_sample_hist.hist().as_slice();
-        let num_coins = hist.len() - 1;
-        let simple_samples: usize = hist
-            .iter()
-            .sum();
-        let missing_samples = self.wl.step_counter() - simple_samples;
+        let wl_time = time.elapsed().as_millis();
+        let time = Instant::now();
         let uniform = Uniform::new_inclusive(0.0, 1.0);
+        let num_coins = self.simple_sample_hist.bin_count() - 1;
         
-        for _ in 0..missing_samples{
-            let mut num_heads = 0;
-            uniform.sample_iter(&mut self.rng)
-                .take(num_coins)
-                .filter(|&val| val <= 0.5)
-                .for_each(|_| num_heads += 1);
-            self.simple_sample_hist.increment_quiet(num_heads);
+        while time.elapsed().as_millis() < wl_time {
+            for _ in 0..3{
+                let mut num_heads = 0;
+                uniform.sample_iter(&mut self.rng)
+                    .take(num_coins)
+                    .filter(|&val| val <= 0.5)
+                    .for_each(|_| num_heads += 1);
+                self.simple_sample_hist.increment_quiet(num_heads);
+            } 
         }
 
     }
