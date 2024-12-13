@@ -4,7 +4,7 @@ use crate::misc::*;
 use egui_plot::{Legend, Line, Plot, PlotPoints, Points};
 use rand::{distributions::Uniform, prelude::Distribution, SeedableRng};
 use rand_pcg::Pcg64;
-use sampling::{HistU32Fast, Histogram, WangLandau};
+use sampling::{HistU32Fast, Histogram, WangLandau, WangLandauEnergy};
 use statrs::distribution::{Binomial, Discrete};
 use crate::dark_magic::BoxedAnything;
 use super::coin_sequence_wl::*;
@@ -47,6 +47,9 @@ pub fn wang_landau_gui(
 )
 {
     let data: &mut WangLandauConfig = any.to_something_or_default_mut();
+    let is_dark_mode = ctx.style()
+        .visuals
+        .dark_mode;
 
     match data.side_panel {
         SidePanelView::Default => {
@@ -194,6 +197,18 @@ pub fn wang_landau_gui(
                     data.wang_landau
                 );
 
+                let current_energy_wl_point = sim.wl.energy()
+                    .map(
+                        |energy|
+                        {
+                            Points::new(PlotPoints::new(vec![[*energy as f64, estimate[*energy as usize]]]))
+                                .radius(13.)
+                                .shape(egui_plot::MarkerShape::Cross)
+                                .name("Current WL walker")
+                                .color(super::parallel_tempering::get_color(3, is_dark_mode))
+                        }
+                    );
+
                 let true_density = match data.display{
                     DisplayState::Linear => sim.true_density_lin.as_slice(),
                     DisplayState::Log => &sim.true_density_log
@@ -236,6 +251,9 @@ pub fn wang_landau_gui(
                             wang_landau_estimate.plot(plot_ui);
                             analytic_results.plot(plot_ui);
                             simple_plot.plot(plot_ui);
+                            if let Some(point) = current_energy_wl_point{
+                                plot_ui.points(point);
+                            }
                         } 
                     );
             }

@@ -1412,7 +1412,7 @@ fn label<S>(
 }
 
 #[inline]
-const fn get_color(idx: u8, is_dark_mode: bool) -> Color32
+pub const fn get_color(idx: u8, is_dark_mode: bool) -> Color32
 {
     COLORS[idx as usize].get_color(is_dark_mode)
 }
