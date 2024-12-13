@@ -37,7 +37,8 @@ pub struct WangLandauConfig
     #[derivative(Default(value="LineOrPoints::Line"))]
     analytic: LineOrPoints,
     wang_landau: LineOrPoints,
-    simple_sample: LineOrPoints
+    simple_sample: LineOrPoints,
+    slow_motion: Speed
 }
 
 
@@ -73,9 +74,22 @@ pub fn wang_landau_gui(
                             data.side_panel = SidePanelView::Hidden;
                         }
 
-                        ui.label("Display mode:");
-                        ui.radio_value(&mut data.display, DisplayState::Linear, "Linear");
-                        ui.radio_value(&mut data.display, DisplayState::Log, "Logarithmic");
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.label("Display mode:");
+                                ui.radio_value(&mut data.display, DisplayState::Linear, "Linear");
+                                ui.radio_value(&mut data.display, DisplayState::Log, "Logarithmic");
+                            }
+                        );
+                        
+                        ui.horizontal(
+                            |ui|
+                            {
+                                ui.radio_value(&mut data.slow_motion, Speed::Regular, "Regular Speed");
+                                ui.radio_value(&mut data.slow_motion, Speed::SlowMotion, "Slow motion");
+                            }
+                        );
 
                         ui.horizontal(
                             |ui|
@@ -259,7 +273,7 @@ pub fn wang_landau_gui(
             }
         );
 
-        sim.sample();
+        sim.sample(data.slow_motion);
         ctx.request_repaint();
     }
 }
@@ -330,22 +344,27 @@ impl Simulation{
     }
 
     pub fn sample(
-        &mut self
+        &mut self,
+        slow_motion: Speed
     )
     {
+        let target = match slow_motion{
+            Speed::SlowMotion => 100,
+            Speed::Regular => 5000
+        };
         let time = Instant::now();
         self.wl.wang_landau_while_acc(
             |ensemble, step, old_energy| {
                 ensemble.update_head_count(step, old_energy)
             }, 
-            |_| {(time.elapsed().as_millis() as f32) < 5.0_f32}
+            |_| time.elapsed().as_micros() < target 
         );
-        let wl_time = time.elapsed().as_millis();
+        let wl_time = time.elapsed().as_micros();
         let time = Instant::now();
         let uniform = Uniform::new_inclusive(0.0, 1.0);
         let num_coins = self.simple_sample_hist.bin_count() - 1;
         
-        while time.elapsed().as_millis() < wl_time {
+        while time.elapsed().as_micros() < wl_time {
             for _ in 0..3{
                 let mut num_heads = 0;
                 uniform.sample_iter(&mut self.rng)
@@ -489,3 +508,9 @@ fn line_or_points_radio_btn(
     );
 }
 
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+pub enum Speed{
+    #[default]
+    Regular,
+    SlowMotion
+}
