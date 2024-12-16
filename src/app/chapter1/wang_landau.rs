@@ -1,5 +1,5 @@
-use std::num::NonZeroU32;
-use egui::{Button, CentralPanel, DragValue};
+use std::{num::{NonZeroU32, NonZeroUsize}, time::Duration};
+use egui::{Button, CentralPanel, DragValue, Slider};
 use crate::misc::*;
 use egui_plot::{Legend, Line, Plot, PlotPoints, Points};
 use rand::{distributions::Uniform, prelude::Distribution, SeedableRng};
@@ -12,8 +12,8 @@ use std::f64::consts::LOG10_E;
 use derivative::Derivative;
 use sampling::WangLandau1T;
 use web_time::Instant;
-
 use super::parallel_tempering::SidePanelView;
+
 
 type ThisWl = WangLandau1T<sampling::HistogramFast<u32>, rand_pcg::Lcg128Xsl64, CoinFlipSequence<rand_pcg::Lcg128Xsl64>, CoinFlipMove, (), u32>;
 
@@ -30,7 +30,7 @@ pub struct WangLandauConfig
     simulation: Option<Simulation>,
     /// Visibility of the side Panel
     side_panel: SidePanelView,
-    #[derivative(Default(value="0.0004"))]
+    #[derivative(Default(value="0.00001"))]
     target_log_f: f64,
     /// Log or Linear?
     display: DisplayState,
@@ -38,7 +38,9 @@ pub struct WangLandauConfig
     analytic: LineOrPoints,
     wang_landau: LineOrPoints,
     simple_sample: LineOrPoints,
-    slow_motion: Speed
+    slow_motion: Speed,
+    #[derivative(Default(value="NonZeroUsize::new(512).unwrap()"))]
+    slow_motion_speed: NonZeroUsize
 }
 
 
@@ -90,6 +92,19 @@ pub fn wang_landau_gui(
                                 ui.radio_value(&mut data.slow_motion, Speed::SlowMotion, "Slow motion");
                             }
                         );
+
+                        if data.slow_motion.is_slow_motion()
+                        {
+                            ui.horizontal(
+                                |ui|
+                                {
+                                    ui.label("Max Speed:");
+                                    ui.add(
+                                        Slider::new(&mut data.slow_motion_speed, NonZeroUsize::new(1).unwrap()..=NonZeroUsize::new(1024).unwrap())
+                                    );
+                                }
+                            );
+                        }
 
                         ui.horizontal(
                             |ui|
@@ -211,17 +226,24 @@ pub fn wang_landau_gui(
                     data.wang_landau
                 );
 
-                let current_energy_wl_point = sim.wl.energy()
-                    .map(
-                        |energy|
-                        {
-                            Points::new(PlotPoints::new(vec![[*energy as f64, estimate[*energy as usize]]]))
-                                .radius(13.)
-                                .shape(egui_plot::MarkerShape::Cross)
-                                .name("Current WL walker")
-                                .color(super::parallel_tempering::get_color(3, is_dark_mode))
-                        }
-                    );
+                let current_energy_wl_point = match data.slow_motion.is_slow_motion(){
+                    false => None,
+                    true => {
+                        sim.wl
+                            .energy()
+                            .map(
+                                |energy|
+                                {
+                                    Points::new(PlotPoints::new(vec![[*energy as f64, estimate[*energy as usize]]]))
+                                        .radius(13.)
+                                        .shape(egui_plot::MarkerShape::Cross)
+                                        .name("Current WL walker")
+                                        .color(super::parallel_tempering::get_color(3, is_dark_mode))
+                                }
+                            )
+                    }
+                };
+                
 
                 let true_density = match data.display{
                     DisplayState::Linear => sim.true_density_lin.as_slice(),
@@ -273,8 +295,18 @@ pub fn wang_landau_gui(
             }
         );
 
-        sim.sample(data.slow_motion);
-        ctx.request_repaint();
+        sim.sample(data.slow_motion, data.slow_motion_speed);
+        
+
+        match data.slow_motion{
+            Speed::Regular => {
+                ctx.request_repaint();
+            },
+            Speed::SlowMotion => {
+                ctx.request_repaint_after(Duration::new(0, (1. / 60. * 1e9) as u32));
+            }
+        }
+
     }
 }
 
@@ -345,20 +377,34 @@ impl Simulation{
 
     pub fn sample(
         &mut self,
-        slow_motion: Speed
+        slow_motion: Speed,
+        slow_motion_speed: NonZeroUsize
     )
     {
-        let target = match slow_motion{
-            Speed::SlowMotion => 100,
-            Speed::Regular => 5000
-        };
         let time = Instant::now();
-        self.wl.wang_landau_while_acc(
-            |ensemble, step, old_energy| {
-                ensemble.update_head_count(step, old_energy)
-            }, 
-            |_| time.elapsed().as_micros() < target 
-        );
+
+        match slow_motion{
+            Speed::SlowMotion => {
+                let cur = self.wl.step_counter();
+                let max = cur + slow_motion_speed.get();
+                self.wl.wang_landau_while_acc(
+                    |ensemble, step, old_energy| {
+                        ensemble.update_head_count(step, old_energy)
+                    }, 
+                    |wl| wl.step_counter() < max && time.elapsed().as_micros() < 100
+                );                
+            },
+            Speed::Regular => {
+                self.wl.wang_landau_while_acc(
+                    |ensemble, step, old_energy| {
+                        ensemble.update_head_count(step, old_energy)
+                    }, 
+                    |_| time.elapsed().as_micros() < 5000
+                );
+            }
+        };
+        
+        
         let wl_time = time.elapsed().as_micros();
         let time = Instant::now();
         let uniform = Uniform::new_inclusive(0.0, 1.0);
@@ -374,8 +420,7 @@ impl Simulation{
                 self.simple_sample_hist.increment_quiet(num_heads);
             } 
         }
-
-    }
+    } 
 
     fn get_simple_sample_estimate(&self, display: DisplayState) -> Vec<f64>
     {
@@ -458,7 +503,7 @@ fn slice_to_line_or_points(
         LineOrPoints::Line => {
             let l = Line::new(plot_points)
                 .name(name)
-                .width(2.0);
+                .width(3.0);
             LoP::Line(l)
         }
     }
@@ -510,7 +555,13 @@ fn line_or_points_radio_btn(
 
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum Speed{
-    #[default]
     Regular,
+    #[default]
     SlowMotion
+}
+
+impl Speed{
+    pub fn is_slow_motion(self) -> bool {
+        matches!(self, Speed::SlowMotion)
+    }
 }

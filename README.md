@@ -15,6 +15,7 @@ Then you can install trunk via
 cargo install trunk
 cargo install wasm-bindgen-cli
 ```
+Note: Tested with trunk v0.21.5
 
 Afterwards for local testing use
 ```bash

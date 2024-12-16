@@ -877,7 +877,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context)
             }
         }
     });  
-
+    
     ctx.request_repaint();
 }
 
