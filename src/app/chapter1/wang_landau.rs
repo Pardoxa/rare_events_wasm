@@ -226,9 +226,9 @@ pub fn wang_landau_gui(
                     data.wang_landau
                 );
 
-                let current_energy_wl_point = match data.slow_motion.is_slow_motion(){
-                    false => None,
-                    true => {
+                let current_energy_wl_point = match data.slow_motion{
+                    Speed::Regular => None,
+                    Speed::SlowMotion => {
                         sim.wl
                             .energy()
                             .map(
