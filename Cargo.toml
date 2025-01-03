@@ -23,9 +23,9 @@ lazy_static = "1.4.0"
 web-time = "1.1.0"
 rand_pcg = { version = "0.3.1"}
 rand = "0.8.5"
-sampling = { git = "https://github.com/Pardoxa/sampling.git", rev = "35af57324c6b33e4bfbbc3907db7ea3b6f40d386" }
+sampling = { git = "https://github.com/Pardoxa/sampling.git", rev = "f5082f85450572bc668c42bc992f4d405829c278" }
 num-traits = "0.2.19"
-ordered-float = "4.5.0"
+ordered-float = "4.6.0"
 statrs = { version = "0.18.0", default-features = false}
 
 # web:
