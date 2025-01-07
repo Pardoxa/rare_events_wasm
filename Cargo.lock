@@ -2528,7 +2528,8 @@ dependencies = [
 [[package]]
 name = "sampling"
 version = "0.2.0"
-source = "git+https://github.com/Pardoxa/sampling.git?rev=f5082f85450572bc668c42bc992f4d405829c278#f5082f85450572bc668c42bc992f4d405829c278"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "400bf014836060cc59cb1753d6136fe0f11795e9c9b5de2407bd6708c6dbe400"
 dependencies = [
  "average",
  "num-bigint",
