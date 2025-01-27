@@ -7,7 +7,12 @@ The current working title is "Simulation of rare events - From the foundations t
 
 The following instructions have been tested under Linux
 
-Install Rust via [rustup](https://rustup.rs/) 
+Install Rust via [rustup](https://rustup.rs/). You can find more information [here](https://doc.rust-lang.org/beta/book/ch01-01-installation.html).
+Next install the webassembly target:
+
+```bash
+rustup target add wasm32-unknown-unknown
+```
 
 Then you can install trunk via 
 
