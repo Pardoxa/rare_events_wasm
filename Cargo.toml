@@ -10,6 +10,7 @@ build = "src/build.rs"
 egui = "0.30.0"
 # Interesting for NixOS: https://github.com/emilk/egui/issues/2486
 # In the future I want to look at nix develop
+# Also look at https://github.com/cargo2nix/cargo2nix
 eframe = { version = "0.30.0", default-features = false, features = [
     "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
