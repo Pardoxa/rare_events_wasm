@@ -18,8 +18,8 @@ eframe = { version = "0.31.1", default-features = false, features = [
     "wayland"
 ] }
 egui_plot= "0.32.1"
-strum = "0.26.2"
-strum_macros = "0.26.2"
+strum = "0.27.1"
+strum_macros = "0.27.1"
 egui_code_editor = "0.2.12"
 derivative = "2.2.0"
 lazy_static = "1.4.0"
@@ -29,16 +29,16 @@ rand = "0.8.5"
 #sampling = { git = "https://github.com/Pardoxa/sampling.git", rev = "f5082f85450572bc668c42bc992f4d405829c278" }
 sampling = "0.2.0"
 num-traits = "0.2.19"
-ordered-float = "4.6.0"
+ordered-float = "5.0.0"
 statrs = { version = "0.18.0", default-features = false}
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen-futures = "0.4.49"
-getrandom = { version = "0.2.15", features = ["js"] }
+wasm-bindgen-futures = "0.4.50"
+getrandom = { version = "0.2.15", features = ["js"] } # is a dependency of egui, can only be updated to 0.3 etc when egui did so as well
 
 [build-dependencies]
-chrono = "0.4.39"
+chrono = "0.4.40"
 
 [profile.release]
 opt-level = 3 # fast and small wasm
