@@ -7,20 +7,20 @@ build = "src/build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = "0.30.0"
+egui = "0.31.1"
 # Interesting for NixOS: https://github.com/emilk/egui/issues/2486
 # In the future I want to look at nix develop
 # Also look at https://github.com/cargo2nix/cargo2nix
-eframe = { version = "0.30.0", default-features = false, features = [
+eframe = { version = "0.31.1", default-features = false, features = [
     "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
     "wayland"
 ] }
-egui_plot= "0.30.0"
+egui_plot= "0.32.1"
 strum = "0.26.2"
 strum_macros = "0.26.2"
-egui_code_editor = "0.2.11"
+egui_code_editor = "0.2.12"
 derivative = "2.2.0"
 lazy_static = "1.4.0"
 web-time = "1.1.0"

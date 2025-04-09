@@ -50,7 +50,7 @@ pub fn chapter_1_switch(any: &mut BoxedAnything, ctx: &egui::Context)
         // The central panel the region left after adding TopPanel's and SidePanel's
 
         let points = PlotPoints::Owned(data.data.clone());
-        let points = Points::new(points).radius(4.0);
+        let points = Points::new("Sinus", points).radius(4.0);
 
         data.points= (0..1000).map(|i| {
             let x = i as f64 * 0.01 + seconds;
@@ -61,7 +61,7 @@ pub fn chapter_1_switch(any: &mut BoxedAnything, ctx: &egui::Context)
         let point_plots: PlotPoints = data.points.iter()
             .copied()
             .collect();
-        let line = Line::new(point_plots);
+        let line = Line::new("test plot", point_plots);
 
         //let line = Line::new(sin);
         Plot::new("my_plot")

@@ -1,4 +1,4 @@
-use egui::Ui;
+use egui::{OutputCommand, Ui};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 use lazy_static::lazy_static;
 
@@ -139,7 +139,6 @@ impl Code{
             }
         };
 
-        
         ui.horizontal(
             |ui|
             {
@@ -153,7 +152,10 @@ impl Code{
                 }
                 if self.show_code && ui.button("Copy Code 📋").on_hover_text("Click to copy code").clicked() {
                     ui.output_mut(
-                        |o| o.copied_text.clone_from(code)
+                        |o| {
+                            let command = OutputCommand::CopyText(code.clone());
+                            o.commands.push(command);
+                        }
                     )
                     
                 }

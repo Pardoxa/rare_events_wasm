@@ -900,7 +900,7 @@ fn show_acceptance_rate(
             |(plot_data, plot_config)|
             {
                 let plot_points = PlotPoints::new(vec![plot_data]);
-                Points::new(plot_points)
+                Points::new("", plot_points)
                     .radius(10.0)
                     .shape(plot_config.0)
                     .color(get_color(plot_config.1, is_dark_mode))
@@ -982,7 +982,7 @@ fn show_exchange_rate(
             |plot_data|
             {
                 let plot_points = PlotPoints::new(vec![plot_data]);
-                Points::new(plot_points)
+                Points::new("", plot_points)
                     .radius(10.0)
                     .color(color)
             }
@@ -1058,7 +1058,7 @@ fn show_plot(
             |(plot_data, plot_config)|
             {
                 let plot_points = PlotPoints::new(vec![plot_data]);
-                Points::new(plot_points)
+                Points::new("", plot_points)
                     .radius(10.0)
                     .shape(plot_config.0)
                     .color(get_color(plot_config.1, is_dark_mode))
@@ -1149,7 +1149,7 @@ fn show_history_plot(
                     while let Some(peeked) = iter.peek(){
                         if entry.0.0 != peeked.0.0 {
                             lines.push(
-                                Line::new(this_vec)
+                                Line::new("", this_vec)
                                     .color(get_color(entry.0.0, is_dark_mode))  
                             );
                             continue 'a;
@@ -1161,7 +1161,7 @@ fn show_history_plot(
                         }
                     } 
                     lines.push(
-                        Line::new(this_vec)
+                        Line::new("", this_vec)
                             .color(get_color(entry.0.0, is_dark_mode))  
                     );
 
@@ -1187,7 +1187,7 @@ fn show_history_plot(
                             let txt = format!("T={}", temp.temperature);
                             let txt = get_rich_text_size(&txt, 15.);
                             let y = minimum as f64 + (maximum - minimum) as f64 * 0.9;
-                            let txt = Text::new(PlotPoint::new(start as f64 * 0.8, y), txt);
+                            let txt = Text::new("", PlotPoint::new(start as f64 * 0.8, y), txt);
                             plot_ui.text(txt);
                         }    
                     );
@@ -1217,6 +1217,7 @@ fn show_hist(
             for (id, temp) in data.temperatures.iter().enumerate().rev(){
         
                 let chart = BarChart::new(
+                    format!("T={}", temp.temperature),
                     temp.hist
                         .hist()
                         .iter()
@@ -1228,8 +1229,7 @@ fn show_hist(
                                     .width(1.0)
                             }
                         ).collect()
-                ).color(get_color(temp.color, is_dark_mode))
-                .name(format!("T={}", temp.temperature));
+                ).color(get_color(temp.color, is_dark_mode));
 
                 let mut plot = Plot::new(format!("{id}HISTPLOT"))
                     .clamp_grid(true)
@@ -1689,6 +1689,7 @@ impl ResultingEstimate{
                                 let len = pdf.len();
                                 let factor = (len as f64).recip();
                                 let line = Line::new(
+                                    format!("T={}", temp.temperature),
                                     pdf.iter()
                                         .enumerate()
                                         .map(
@@ -1697,7 +1698,7 @@ impl ResultingEstimate{
                                                 [idx as f64 * factor, *prob]
                                             }
                                         ).collect::<Vec<_>>()
-                                    ).name(format!("T={}", temp.temperature))
+                                    )
                                     .color(get_color(temp.color, is_dark_mode));
                                 plot_ui.line(line);
                             }
@@ -1718,6 +1719,7 @@ impl ResultingEstimate{
                             |plot_ui|
                             {
                                 let line: Line = Line::new(
+                                    "Merged",
                                     merged.iter()
                                         .enumerate()
                                         .map(
@@ -1726,9 +1728,10 @@ impl ResultingEstimate{
                                                 [idx as f64, *val]
                                             }
                                         ).collect::<Vec<_>>()
-                                    ).name("Merged");
+                                    );
 
                                 let line2 = Line::new(
+                                    "Analytic Probability",
                                     data.true_density
                                         .iter()
                                         .enumerate()
@@ -1738,7 +1741,7 @@ impl ResultingEstimate{
                                                 [idx as f64, *val]
                                             }
                                         ).collect::<Vec<_>>()
-                                    ).name("Analytic Probability");
+                                    );
                                 
                                 plot_ui.line(line2);
                                 plot_ui.line(line);

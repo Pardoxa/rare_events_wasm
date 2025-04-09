@@ -234,10 +234,9 @@ pub fn wang_landau_gui(
                             .map(
                                 |energy|
                                 {
-                                    Points::new(PlotPoints::new(vec![[*energy as f64, estimate[*energy as usize]]]))
+                                    Points::new("Current WL walker", PlotPoints::new(vec![[*energy as f64, estimate[*energy as usize]]]))
                                         .radius(13.)
                                         .shape(egui_plot::MarkerShape::Cross)
-                                        .name("Current WL walker")
                                         .color(super::parallel_tempering::get_color(3, is_dark_mode))
                                 }
                             )
@@ -478,11 +477,11 @@ impl DisplayState
     }
 }
 
-fn slice_to_line_or_points(
+fn slice_to_line_or_points<'a>(
     slice: &[f64],
     name: &str,
     line_or_points: LineOrPoints
-) -> LoP
+) -> LoP<'a>
 {
     let plot_points = PlotPoints::new(
         slice.iter()
@@ -495,14 +494,12 @@ fn slice_to_line_or_points(
 
     match line_or_points{
         LineOrPoints::Points => {
-            let p = Points::new(plot_points)
-                .radius(5.0)
-                .name(name);
+            let p = Points::new(name, plot_points)
+                .radius(5.0);
             LoP::Points(p)
         },
         LineOrPoints::Line => {
-            let l = Line::new(plot_points)
-                .name(name)
+            let l = Line::new(name, plot_points)
                 .width(3.0);
             LoP::Line(l)
         }
@@ -510,13 +507,13 @@ fn slice_to_line_or_points(
     
 }
 
-pub enum LoP{
-    Line(Line),
-    Points(Points)
+pub enum LoP<'a>{
+    Line(Line<'a>),
+    Points(Points<'a>)
 }
 
-impl LoP{
-    pub fn plot(self, plot_ui: &mut egui_plot::PlotUi){
+impl<'a> LoP<'a>{
+    pub fn plot(self, plot_ui: &mut egui_plot::PlotUi<'a>){
         match self
         {
             Self::Line(line) => {
