@@ -2,7 +2,7 @@
 name = "rare_events_wasm"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.86"
 build = "src/build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,7 +20,7 @@ eframe = { version = "0.31.1", default-features = false, features = [
 egui_plot= "0.32.1"
 strum = "0.27.1"
 strum_macros = "0.27.1"
-egui_code_editor = "0.2.12"
+egui_code_editor = "0.2.13"
 derivative = "2.2.0"
 lazy_static = "1.4.0"
 web-time = "1.1.0"
@@ -38,7 +38,7 @@ wasm-bindgen-futures = "0.4.50"
 getrandom = { version = "0.2.15", features = ["js"] } # is a dependency of egui, can only be updated to 0.3 etc when egui did so as well
 
 [build-dependencies]
-chrono = "0.4.40"
+chrono = "0.4.41"
 
 [profile.release]
 opt-level = 3 # fast and small wasm
