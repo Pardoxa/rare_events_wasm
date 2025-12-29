@@ -1,4 +1,4 @@
-use egui::{OutputCommand, Ui};
+use egui::OutputCommand;
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 use std::sync::LazyLock;
 
@@ -75,7 +75,7 @@ impl Code {
         }
     }
 
-    pub fn display(&mut self, ui: &mut Ui, is_dark_mode: bool) {
+    pub fn display(&mut self, ui: &mut egui::Ui, is_dark_mode: bool) {
         let both_avail = self.c_code.is_some() && self.rust_code.is_some();
         let code = match self.current_display_language {
             DisplayLanguage::C => {

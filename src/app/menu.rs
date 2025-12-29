@@ -172,7 +172,7 @@ pub struct MenuOptions {
 pub fn default_menu(ctx: &egui::Context, opt: &mut MenuOptions) {
     egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
         // The top panel is often a good place for a menu bar:
-        egui::menu::bar(ui, |ui| {
+        egui::MenuBar::new().ui(ui, |ui| {
             // If I want to do different things in native or web-app
             // let is_web = cfg!(target_arch = "wasm32");
             let default_menu = GlobalContextMenu::default();
