@@ -7,20 +7,20 @@ build = "src/build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = "0.32.0"
+egui = "0.33.3"
 # Interesting for NixOS: https://github.com/emilk/egui/issues/2486
 # In the future I want to look at nix develop
 # Also look at https://github.com/cargo2nix/cargo2nix
-eframe = { version = "0.32.0", default-features = false, features = [
+eframe = { version = "0.33.3", default-features = false, features = [
     "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
     "wayland"
 ] }
-egui_plot= "0.33.0"
+egui_plot= "0.34.0"
 strum = "0.27.2"
 strum_macros = "0.27.2"
-egui_code_editor = "=0.2.14"
+egui_code_editor = "=0.2.20"
 derivative = "2.2.0"
 web-time = "1.1.0"
 rand_pcg = { version = "0.9.0"}
@@ -37,7 +37,7 @@ wasm-bindgen-futures = "0.4.56"
 getrandom = { version = "^0.3.4", features = ["wasm_js"] } # is a dependency of egui, can only be updated to 0.3 etc when egui did so as well
 
 [build-dependencies]
-chrono = "0.4.41"
+chrono = "0.4.42"
 
 [profile.release]
 opt-level = 3 # fast and small wasm

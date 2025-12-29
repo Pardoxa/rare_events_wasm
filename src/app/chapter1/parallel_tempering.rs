@@ -361,7 +361,7 @@ pub fn parallel_tempering_gui(any: &mut BoxedAnything, ctx: &egui::Context) {
     }
 
     if matches!(data.side_panel, SidePanelView::Default) {
-        let screen_width = ctx.screen_rect().width();
+        let screen_width = ctx.content_rect().width();
         let is_desktop = screen_width > 600.0;
         data.side_panel = if is_desktop {
             SidePanelView::Shown
