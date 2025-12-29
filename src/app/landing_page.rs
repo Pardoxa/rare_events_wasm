@@ -7,9 +7,8 @@ use super::{chapter1, ChapterAnchor, GlobalContextMenu, MenuOptions};
 pub struct AppState {
     pub menu_options: MenuOptions,
     pub text: String,
-    pub anything: BoxedAnything
+    pub anything: BoxedAnything,
 }
-
 
 impl AppState {
     /// Called once before the first frame.
@@ -19,13 +18,11 @@ impl AppState {
 
         // here I do NOT save the app state
 
-        eframe.egui_ctx.set_fonts(
-            FontDefinitions::default()
-        );
-        AppState{
+        eframe.egui_ctx.set_fonts(FontDefinitions::default());
+        AppState {
             menu_options: MenuOptions::default(),
             text: String::new(),
-            anything: BoxedAnything::new(())
+            anything: BoxedAnything::new(()),
         }
     }
 }
@@ -38,62 +35,56 @@ impl eframe::App for AppState {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        
-
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
         let old_anchor = self.menu_options.anchor;
         #[cfg(target_arch = "wasm32")]
         if let Some(anchor) = _frame.info().web_info.location.hash.strip_prefix('#') {
-            self.menu_options.anchor = match ChapterAnchor::read_str(anchor){
+            self.menu_options.anchor = match ChapterAnchor::read_str(anchor) {
                 Some(a) => a,
-                None => ChapterAnchor::Index
+                None => ChapterAnchor::Index,
             };
         }
         self.text = format!("{:?}", self.menu_options.anchor);
-        
+
         super::default_menu(ctx, &mut self.menu_options);
 
-        if old_anchor == self.menu_options.anchor{
-            // like this I can now get default values or the stored value, 
+        if old_anchor == self.menu_options.anchor {
+            // like this I can now get default values or the stored value,
             // so I can use this to switch between them
-            match &self.menu_options.anchor{
+            match &self.menu_options.anchor {
                 ChapterAnchor::Chapter1(which) => {
                     chapter1::chapter_1_switch(which, &mut self.anything, ctx);
-                },
+                }
                 ChapterAnchor::Chapter2(_) => {
                     let some: &mut u32 = self.anything.to_something_or_default_mut();
                     *some = 10;
-                    
-                },
+                }
                 ChapterAnchor::Index => {
                     index_page(ctx, &mut self.menu_options.anchor);
                 }
             }
-        } 
+        }
 
         if old_anchor != self.menu_options.anchor {
             #[cfg(target_arch = "wasm32")]
-            if _frame.is_web()
-            {
-                ctx.open_url(egui::OpenUrl::same_tab(self.menu_options.anchor.get_string()))
+            if _frame.is_web() {
+                ctx.open_url(egui::OpenUrl::same_tab(
+                    self.menu_options.anchor.get_string(),
+                ))
             }
         }
-        
-        
     }
 }
 
-fn index_page(ctx: &egui::Context, anchor: &mut ChapterAnchor)
-{
-
+fn index_page(ctx: &egui::Context, anchor: &mut ChapterAnchor) {
     egui::CentralPanel::default().show(ctx, |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
         ui.heading("Index");
 
         ui.label("Hier entsteht eine neue Website mithilfe von Rust und Webassembly. Die website ist bisher in der frühen Testphase. Kommen Sie am besten später wieder!");
         ui.label("A new website is being created here with the help of Rust and Webassembly. The website is currently in the early test phase. It's best to come back later!");
-    
+
         let menu = GlobalContextMenu::default();
         ui.separator();
         menu.print_links(ui, anchor);
@@ -118,7 +109,7 @@ fn index_page(ctx: &egui::Context, anchor: &mut ChapterAnchor)
             );
             powered_by_egui_and_eframe(ui);
             egui::warn_if_debug_build(ui);
-            
+
         });
     });
 }

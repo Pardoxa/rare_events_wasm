@@ -13,7 +13,7 @@ impl Default for TemplateApp {
             // Example stuff:
             label: "Hello World!".to_owned(),
             value: 2.7,
-            menu_options: MenuOptions::default()
+            menu_options: MenuOptions::default(),
         }
     }
 }

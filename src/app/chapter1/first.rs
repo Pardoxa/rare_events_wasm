@@ -1,32 +1,25 @@
 use derivative::Derivative;
 // This is an example
-use crate::dark_magic::*;
 use crate::app::code_editor::Code;
+use crate::dark_magic::*;
 
 #[derive(Debug, Derivative)]
 #[derivative(Default)]
-struct FirstData{
+struct FirstData {
     slider: f64,
-    #[derivative(Default(value="Code::new(CODE_RUST.to_owned(), CODE_C.to_owned())"))]
-    code: Code
+    #[derivative(Default(value = "Code::new(CODE_RUST.to_owned(), CODE_C.to_owned())"))]
+    code: Code,
 }
 
-pub fn chapter_1_switch(any: &mut BoxedAnything, ctx: &egui::Context)
-{
+pub fn chapter_1_switch(any: &mut BoxedAnything, ctx: &egui::Context) {
     let data: &mut FirstData = any.to_something_or_default_mut();
     let is_dark_mode = ctx.style().visuals.dark_mode;
     egui::CentralPanel::default().show(ctx, |ui| {
         // The central panel the region left after adding TopPanel's and SidePanel's
-        ui.add(
-            egui::Slider::new(
-                &mut data.slider, 
-                0.0..=100.0
-            ).text("Test value")
-        );
+        ui.add(egui::Slider::new(&mut data.slider, 0.0..=100.0).text("Test value"));
 
         data.code.display(ui, is_dark_mode)
     });
-    
 }
 
 const CODE_RUST: &str = r#"
