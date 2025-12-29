@@ -1,6 +1,6 @@
 use egui::{OutputCommand, Ui};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum DisplayLanguage {
@@ -9,34 +9,31 @@ pub enum DisplayLanguage {
     Rust,
 }
 
-lazy_static! {
-    static ref C_SYNTAX: Syntax = {
-        let c_types = [
-            "int", "void", "double", "char", "short", "long", "unsigned", "signed", "float",
-            "union",
-        ];
+static C_SYNTAX: LazyLock<Syntax> = LazyLock::new(|| {
+    let c_types = [
+        "int", "void", "double", "char", "short", "long", "unsigned", "signed", "float", "union",
+    ];
 
-        let keywords = [
-            "if", "else", "struct", "break", "continue", "for", "while", "do", "auto", "static",
-            "volatile", "goto", "default", "typedef", "switch", "enum", "case", "const",
-        ];
+    let keywords = [
+        "if", "else", "struct", "break", "continue", "for", "while", "do", "auto", "static",
+        "volatile", "goto", "default", "typedef", "switch", "enum", "case", "const",
+    ];
 
-        let special = ["return"];
+    let special = ["return"];
 
-        Syntax::new("C")
-            .with_comment("//")
-            .with_comment_multiline(["/*", "*/"])
-            .with_types(c_types)
-            .with_keywords(keywords)
-            .with_case_sensitive(true)
-            .with_special(special)
-    };
-}
+    Syntax::new("C")
+        .with_comment("//")
+        .with_comment_multiline(["/*", "*/"])
+        .with_types(c_types)
+        .with_keywords(keywords)
+        .with_case_sensitive(true)
+        .with_special(special)
+});
 
 impl DisplayLanguage {
     pub fn get_syntax(self) -> Syntax {
         match self {
-            Self::C => (*C_SYNTAX).clone(),
+            Self::C => C_SYNTAX.clone(),
             Self::Rust => Syntax::rust(),
         }
     }
