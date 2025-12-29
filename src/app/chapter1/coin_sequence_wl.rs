@@ -56,7 +56,7 @@ impl<R> CoinFlipSequence<R>
         let mut seq = Vec::with_capacity(n);
         seq.extend(
             (0..n).map(|_| {
-                if rng.gen::<bool>() {
+                if rng.random::<bool>() {
                     CoinFlip::Tail
                 } else {
                     CoinFlip::Head
@@ -110,7 +110,7 @@ where R: Rng
     /// Perform a markov step
     fn m_step(&mut self) -> CoinFlipMove {
         // draw a random position
-        let pos = self.rng.gen_range(0..self.seq.len());
+        let pos = self.rng.random_range(0..self.seq.len());
         let previous = self.seq[pos];
         // flip coin at that position
         self.seq[pos].turn();

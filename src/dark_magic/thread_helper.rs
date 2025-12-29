@@ -63,7 +63,7 @@ impl<T, E> ThreadHelper<T, E>
     /// This lock only works when there are multiple copies.
     /// If there is only one copy, this probably means that the data 
     /// was deleted in the main thread and our helper thread should not run anymore
-    pub fn internal_data_lock(&self) -> Option<MutexGuard<T>>
+    pub fn internal_data_lock<'a>(&'a self) -> Option<MutexGuard<'a, T>>
     {
         if self.has_multiple_copies() {
             let lock = self.internal_data.lock();
@@ -76,7 +76,7 @@ impl<T, E> ThreadHelper<T, E>
     /// This lock only works when there are multiple copies.
     /// If there is only one copy, this probably means that the data 
     /// was deleted in the main thread and our helper thread should not run anymore
-    pub fn exposed_data_write_lock(&self) -> Option<RwLockWriteGuard<ExposedData<E>>>
+    pub fn exposed_data_write_lock<'a>(&'a self) -> Option<RwLockWriteGuard<'a, ExposedData<E>>>
     {
         if self.has_multiple_copies() {
             let lock = self.exposed_data.write();

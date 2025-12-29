@@ -2,7 +2,7 @@ use std::{num::{NonZeroU32, NonZeroUsize}, time::Duration};
 use egui::{Button, CentralPanel, DragValue, Slider};
 use crate::misc::*;
 use egui_plot::{Legend, Line, Plot, PlotPoints, Points};
-use rand::{distributions::Uniform, prelude::Distribution, SeedableRng};
+use rand::{distr::Uniform, prelude::Distribution, SeedableRng};
 use rand_pcg::Pcg64;
 use sampling::{HistU32Fast, Histogram, WangLandau, WangLandauEnergy};
 use statrs::distribution::{Binomial, Discrete};
@@ -335,8 +335,8 @@ impl Simulation{
     ) -> Self
     {
         let mut rng = Pcg64::seed_from_u64(data.seed);
-        let wl_rng = Pcg64::from_rng(&mut rng).unwrap();
-        let coin_rng = Pcg64::from_rng(&mut rng).unwrap();
+        let wl_rng = Pcg64::from_rng(&mut rng);
+        let coin_rng = Pcg64::from_rng(&mut rng);
 
         let ensemble = CoinFlipSequence::new(
             data.coin_sequence_length.get() as usize, 
@@ -406,7 +406,8 @@ impl Simulation{
         
         let wl_time = time.elapsed().as_micros();
         let time = Instant::now();
-        let uniform = Uniform::new_inclusive(0.0, 1.0);
+        let uniform = Uniform::new_inclusive(0.0, 1.0)
+            .expect("This is valid");
         let num_coins = self.simple_sample_hist.bin_count() - 1;
         
         while time.elapsed().as_micros() < wl_time {

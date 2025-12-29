@@ -5,12 +5,6 @@ use egui_plot::{Plot, PlotPoint, PlotPoints, Points, Line};
 use web_time::Instant;
 
 
-
-#[derive(Default, Clone)]
-pub struct InternalData {
-    // Nothing, for this simple example we have no internal data
-}
-
 #[derive(Derivative)]
 #[derivative(Default)]
 struct SecondData{

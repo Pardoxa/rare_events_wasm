@@ -5,7 +5,7 @@ use sampling::{HistI32Fast, Histogram};
 use derivative::Derivative;
 use egui::{Button, Color32, DragValue, Grid, Label, Rect, RichText, Slider, Widget, Window};
 use egui_plot::{AxisHints, Bar, BarChart, Legend, Line, MarkerShape, Plot, PlotBounds, PlotPoint, PlotPoints, Points, Text};
-use rand::{distributions::Uniform, prelude::Distribution, seq::SliceRandom, Rng, SeedableRng};
+use rand::{distr::Uniform, prelude::{Distribution, IndexedMutRandom}, Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use crate::dark_magic::BoxedAnything;
 use ordered_float::NotNan;
@@ -268,7 +268,8 @@ impl Temperature{
             self.config.truncate(length_usize);
         } else {
             let missing = length_usize - self.config.len();
-            let uniform = Uniform::new_inclusive(0.0, 1.0);
+            let uniform = Uniform::new_inclusive(0.0, 1.0)
+                .expect("Will not fail");
             self.config.extend(
                 uniform.sample_iter(rng)
                     .take(missing)
@@ -288,7 +289,7 @@ impl Temperature{
         let old_heads = self.number_of_heads();
         let entry = self.config.choose_mut(rng).unwrap();
         let old_val = *entry;
-        *entry = rng.gen_bool(0.5);
+        *entry = rng.random_bool(0.5);
         let mut new_heads = if old_val == *entry{
             old_heads
         } else if old_val {
@@ -298,7 +299,7 @@ impl Temperature{
         };
 
         let acceptance_prob = ((old_heads - new_heads) as f64 / (self.temperature * len as f64)).exp();
-        if rng.gen::<f64>() >= acceptance_prob {
+        if rng.random::<f64>() >= acceptance_prob {
             // we reject
             *entry = old_val;
             new_heads = old_heads;
@@ -330,7 +331,7 @@ impl Temperature{
     ) -> Self
     {
         let config = (0..length.get())
-            .map(|_| rng.gen_bool(0.5))
+            .map(|_| rng.random_bool(0.5))
             .collect();
         Temperature{
             temperature: temp,
@@ -1268,14 +1269,14 @@ fn temp_exchanges(
 
     for _ in 0..num_pairs
     {
-        let lower = rng.gen_range(0..num_pairs);
+        let lower = rng.random_range(0..num_pairs);
         let mut iter = temperatures
             .iter_mut()
             .skip(lower);
         let a = iter.next().unwrap();
         let b = iter.next().unwrap();
         let exchange_prob = exchange_acceptance_probability(a, b);
-        if exchange_prob >= rng.gen()
+        if exchange_prob >= rng.random()
         {
             exchange_temperatures(a, b);
             pair_acceptance.count_acceptance(a.temperature_id, b.temperature_id);

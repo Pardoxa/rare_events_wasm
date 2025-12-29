@@ -3,10 +3,11 @@ use strum_macros::EnumIter;
 use strum_macros::EnumString;
 use std::marker;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum ChapterAnchor{
     Chapter1(Chapter1),
     Chapter2(Chapter2),
+    #[default]
     Index
 }
 
@@ -21,13 +22,6 @@ impl ChapterAnchor{
         format!("#{s}")
     }
 }
-
-impl Default for ChapterAnchor{
-    fn default() -> Self {
-        Self::Index
-    }
-}
-
 
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, EnumIter, EnumString)]
